@@ -8,6 +8,7 @@ import NotesToolbar from '../components/notes/NotesToolbar';
 import WindowOverlayControls from '../components/notes/WindowOverlayControls';
 import { useActiveTime } from '../hooks/useActiveTime';
 import { useAppSettings } from '../hooks/useAppSettings';
+import { useFocusTimer } from '../hooks/useFocusTimer';
 import { useNotes } from '../hooks/useNotes';
 import type { CreateNoteInput } from '../types/note';
 
@@ -15,6 +16,12 @@ function NotesBoard() {
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
   const [isVisualShellReady, setIsVisualShellReady] = useState(false);
+  const {
+    session: focusSession,
+    completedCount: completedFocusCount,
+    startTimer,
+    dismissTimer,
+  } = useFocusTimer();
   const {
     settings,
     updateTheme,
@@ -86,8 +93,17 @@ function NotesBoard() {
     setExpandedNoteId((currentValue) => (currentValue === id ? null : id));
   }
 
+  const shellClassName = [
+    'app-shell',
+    isVisualShellReady ? '' : 'app-shell-booting',
+    focusSession?.phase === 'alerting' ? 'app-shell-alerting' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <main className={isVisualShellReady ? 'app-shell' : 'app-shell app-shell-booting'}>
+    <main className={shellClassName}>
+      <div className="app-top-drag-zone" aria-hidden="true" />
       <WindowOverlayControls
         settings={settings}
         onThemeChange={updateTheme}
@@ -162,7 +178,14 @@ function NotesBoard() {
           )}
         </section>
       </div>
-      <NotesFloatingStats totalNotes={notes.length} pinnedNotes={pinnedCount} />
+      <NotesFloatingStats
+        totalNotes={notes.length}
+        pinnedNotes={pinnedCount}
+        completedFocusCount={completedFocusCount}
+        focusSession={focusSession}
+        onStartFocusTimer={startTimer}
+        onDismissFocusTimer={dismissTimer}
+      />
     </main>
   );
 }

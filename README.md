@@ -113,18 +113,22 @@ Windows unpacked directory:
 npm run package:win:dir
 ```
 
+Portable and unpacked builds are the current supported release formats. An NSIS installer is not a near-term priority while the unpacked build already covers the fast-launch use case.
+
 ## Roadmap
 
 ### Next
 
-- [ ] Add short countdown / focus timers
+- [x] Add short countdown / focus timers
 - [ ] Add tray integration and background controls
 - [ ] Add import / export for notes and settings
+- [ ] Evaluate `electron-vite` to unify the Electron build pipeline
 - [ ] Keep trimming cold-start overhead where it does not compromise the current visual shell
 
 ### Later
 
 - [ ] Revisit richer note metadata and filtering
+- [ ] Consider Tauri as a future migration option if Electron no longer meets startup or package-size goals
 - [ ] Re-evaluate SQLite only if local JSON becomes a clear limitation
 
 ## License
