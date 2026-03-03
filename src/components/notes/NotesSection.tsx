@@ -1,11 +1,15 @@
 import NoteList from './NoteList';
-import type { Note } from '../../types/note';
+import type { Note, UpdateNoteInput } from '../../types/note';
 
 type NotesSectionProps = {
   title: string;
   sectionId: string;
   notes: Note[];
   pinned?: boolean;
+  expandedNoteId: string | null;
+  onToggleExpand: (id: string) => void;
+  onDelete: (id: string) => Promise<boolean>;
+  onUpdate: (id: string, input: UpdateNoteInput) => Promise<Note | null>;
 };
 
 function NotesSection({
@@ -13,6 +17,10 @@ function NotesSection({
   sectionId,
   notes,
   pinned = false,
+  expandedNoteId,
+  onToggleExpand,
+  onDelete,
+  onUpdate,
 }: NotesSectionProps) {
   if (notes.length === 0) {
     return null;
@@ -24,7 +32,14 @@ function NotesSection({
         <h2 id={sectionId}>{title}</h2>
         <span className="section-count">{notes.length}</span>
       </div>
-      <NoteList notes={notes} pinned={pinned} />
+      <NoteList
+        notes={notes}
+        pinned={pinned}
+        expandedNoteId={expandedNoteId}
+        onToggleExpand={onToggleExpand}
+        onDelete={onDelete}
+        onUpdate={onUpdate}
+      />
     </section>
   );
 }

@@ -10,4 +10,8 @@ contextBridge.exposeInMainWorld('stickyDesk', {
   setWindowSize: (width, height) =>
     ipcRenderer.invoke('window:set-size', width, height),
   setAlwaysOnTop: (value) => ipcRenderer.invoke('window:set-always-on-top', value),
+  listNotes: () => ipcRenderer.invoke('notes:list'),
+  createNote: (input) => ipcRenderer.invoke('notes:create', input),
+  updateNote: (id, input) => ipcRenderer.invoke('notes:update', id, input),
+  deleteNote: (id) => ipcRenderer.invoke('notes:delete', id),
 });

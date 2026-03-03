@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react';
-import { loadNotes } from '../data/notes';
+import {
+  createNote,
+  deleteNote,
+  loadNotes,
+  updateNote,
+} from '../data/notes';
 import {
   filterNotes,
   getPinnedNotes,
   getRegularNotes,
 } from '../lib/noteSelectors';
-import type { Note } from '../types/note';
+import type { CreateNoteInput, Note, UpdateNoteInput } from '../types/note';
 
 type UseNotesResult = {
   notes: Note[];
@@ -16,6 +21,9 @@ type UseNotesResult = {
   searchQuery: string;
   setSearchQuery: (value: string) => void;
   isFiltering: boolean;
+  addNote: (input: CreateNoteInput) => Promise<Note>;
+  editNote: (id: string, input: UpdateNoteInput) => Promise<Note | null>;
+  removeNote: (id: string) => Promise<boolean>;
 };
 
 export function useNotes(): UseNotesResult {
@@ -23,14 +31,18 @@ export function useNotes(): UseNotesResult {
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    // Guard against setting state after unmount while the async seed loader resolves.
+    // Guard against setting state after unmount while the async notes loader resolves.
     let active = true;
 
-    void loadNotes().then((items) => {
-      if (active) {
-        setNotes(items);
-      }
-    });
+    void loadNotes()
+      .then((items) => {
+        if (active) {
+          setNotes(items);
+        }
+      })
+      .catch((error) => {
+        console.error('StickyDesk: failed to load notes.', error);
+      });
 
     return () => {
       active = false;
@@ -41,6 +53,43 @@ export function useNotes(): UseNotesResult {
   const visibleNotes = filterNotes(notes, searchQuery);
   const isFiltering = searchQuery.trim().length > 0;
 
+  async function addNote(input: CreateNoteInput): Promise<Note> {
+    const nextNote = await createNote(input);
+
+    setNotes((currentNotes) => [nextNote, ...currentNotes]);
+
+    return nextNote;
+  }
+
+  async function editNote(
+    id: string,
+    input: UpdateNoteInput,
+  ): Promise<Note | null> {
+    const nextNote = await updateNote(id, input);
+
+    if (!nextNote) {
+      return null;
+    }
+
+    setNotes((currentNotes) =>
+      currentNotes.map((note) => (note.id === id ? nextNote : note)),
+    );
+
+    return nextNote;
+  }
+
+  async function removeNote(id: string): Promise<boolean> {
+    const wasDeleted = await deleteNote(id);
+
+    if (!wasDeleted) {
+      return false;
+    }
+
+    setNotes((currentNotes) => currentNotes.filter((note) => note.id !== id));
+
+    return true;
+  }
+
   return {
     notes,
     visibleNotes,
@@ -50,5 +99,8 @@ export function useNotes(): UseNotesResult {
     searchQuery,
     setSearchQuery,
     isFiltering,
+    addNote,
+    editNote,
+    removeNote,
   };
 }

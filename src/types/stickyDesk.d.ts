@@ -1,3 +1,5 @@
+import type { CreateNoteInput, Note, UpdateNoteInput } from './note';
+
 type WindowBounds = {
   width: number;
   height: number;
@@ -13,6 +15,10 @@ type StickyDeskBridge = {
   closeWindow: () => void;
   setWindowSize: (width: number, height: number) => Promise<WindowBounds | null>;
   setAlwaysOnTop: (value: boolean) => Promise<boolean>;
+  listNotes: () => Promise<Note[]>;
+  createNote: (input: CreateNoteInput) => Promise<Note>;
+  updateNote: (id: string, input: UpdateNoteInput) => Promise<Note | null>;
+  deleteNote: (id: string) => Promise<boolean>;
 };
 
 declare global {

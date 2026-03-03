@@ -1,6 +1,7 @@
 {
   "name": "sticky-notes",
   "version": "0.1.0",
+  "author": "lcy",
   "private": true,
   "description": "Minimal Electron + React shell for StickyDesk.",
   "main": "./main.cjs",
@@ -9,8 +10,38 @@
     "dev:renderer": "vite",
     "dev:electron": "set \"ELECTRON_RUN_AS_NODE=\" && wait-on tcp:5173 && electron .",
     "build": "vite build",
+    "package:win": "npm run build && electron-builder --win portable",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "build": {
+    "appId": "com.lcy.stickydesk",
+    "productName": "StickyDesk",
+    "asar": true,
+    "electronFuses": {
+      "runAsNode": false
+    },
+    "directories": {
+      "output": "out"
+    },
+    "files": [
+      "dist/**",
+      "main.cjs",
+      "preload.cjs",
+      "package.json"
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "StickyDesk-${version}-portable.${ext}"
+    }
   },
   "dependencies": {
     "react": "^19.2.4",
@@ -23,6 +54,7 @@
     "@vitejs/plugin-react": "^5.1.4",
     "concurrently": "^9.2.1",
     "electron": "^40.6.1",
+    "electron-builder": "^26.8.1",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
     "wait-on": "^8.0.5"

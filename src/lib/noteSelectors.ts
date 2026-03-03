@@ -16,11 +16,10 @@ export function filterNotes(notes: Note[], searchQuery: string): Note[] {
   }
 
   return notes.filter((note) => {
-    // Search intentionally spans the lightweight fields we still keep in the list view.
+    // Search intentionally stays on the fields the note model keeps today.
     const searchableFields = [
       note.title,
       note.content,
-      note.category,
       ...note.tags,
     ];
 

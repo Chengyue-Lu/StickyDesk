@@ -3,7 +3,18 @@ export type Note = {
   title: string;
   content: string;
   tags: string[];
-  category: string;
+  createdAt: string;
   updatedAt: string;
   pinned?: boolean;
 };
+
+export type CreateNoteInput = {
+  title: string;
+  content: string;
+  tags?: string[];
+  pinned?: boolean;
+};
+
+export type UpdateNoteInput = Partial<
+  Pick<Note, 'title' | 'content' | 'tags' | 'pinned'>
+>;

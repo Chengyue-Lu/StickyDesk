@@ -47,6 +47,7 @@ The current version focuses on a narrow frameless window, quick note browsing, d
 - React 19
 - TypeScript
 - Vite
+- Storage: local JSON first, SQLite only if the app later needs heavier querying or indexing
 
 ## Project Structure
 
@@ -81,10 +82,11 @@ npm run build
 
 ## Near-Term Roadmap
 
-- [ ] Note CRUD and local persistence
-- [ ] Real settings for theme and sort behavior
-- [ ] Better note detail / expand interactions
-- [ ] Optional stronger desktop integration (startup, tray, richer window behaviors)
+- [ ] Move notes and settings from seed data to local JSON persistence
+- [ ] Add note creation, expansion, inline editing, and deletion
+- [ ] Add context menu actions for quick note operations
+- [ ] Add quick countdown tasks for short focus sessions
+- [ ] Turn theme, sorting, and window behavior into real settings
 
 ## License
 
