@@ -9,7 +9,8 @@ type ActivitySnapshot = {
 export type UseActiveTimeResult = {
   todayActiveSeconds: number;
   totalActiveSeconds: number;
-  idleSeconds: number | null;
+  inactiveSeconds: number | null;
+  isIdle: boolean;
   isTrackingAvailable: boolean;
   resetTodayActiveSeconds: () => void;
   resetTotalActiveSeconds: () => void;
@@ -17,7 +18,7 @@ export type UseActiveTimeResult = {
 
 const STORAGE_KEY = 'stickyDesk.activity.v1';
 const POLL_INTERVAL_MS = 1000;
-const ACTIVE_IDLE_THRESHOLD_SECONDS = 60;
+const ACTIVE_IDLE_THRESHOLD_SECONDS = 20;
 const MAX_ELAPSED_SECONDS = 30;
 
 function getDayKey(date: Date): string {
@@ -101,7 +102,8 @@ function writeSnapshot(snapshot: ActivitySnapshot): void {
 
 export function useActiveTime(): UseActiveTimeResult {
   const [snapshot, setSnapshot] = useState<ActivitySnapshot>(() => readSnapshot());
-  const [idleSeconds, setIdleSeconds] = useState<number | null>(null);
+  const [inactiveSeconds, setInactiveSeconds] = useState<number | null>(null);
+  const [isIdle, setIsIdle] = useState(false);
   const [isTrackingAvailable, setIsTrackingAvailable] = useState(
     () => typeof window !== 'undefined' && typeof window.stickyDesk?.getIdleSeconds === 'function',
   );
@@ -121,6 +123,7 @@ export function useActiveTime(): UseActiveTimeResult {
 
     let isCancelled = false;
     let lastSampleAt = Date.now();
+    let lastWasIdle = false;
 
     const sampleActivity = async () => {
       try {
@@ -135,10 +138,28 @@ export function useActiveTime(): UseActiveTimeResult {
           0,
           Math.round((now - lastSampleAt) / 1000),
         );
+        const boundedElapsedSeconds = Math.min(
+          elapsedSeconds,
+          MAX_ELAPSED_SECONDS,
+        );
+        const nextIsIdle = latestIdleSeconds >= ACTIVE_IDLE_THRESHOLD_SECONDS;
 
         lastSampleAt = now;
-        setIdleSeconds(latestIdleSeconds);
         setIsTrackingAvailable(true);
+        setIsIdle(nextIsIdle);
+
+        if (!nextIsIdle) {
+          lastWasIdle = false;
+          setInactiveSeconds(0);
+        } else if (!lastWasIdle) {
+          // When the system first crosses the idle threshold, the visible idle timer starts fresh at 0.
+          lastWasIdle = true;
+          setInactiveSeconds(0);
+        } else {
+          setInactiveSeconds((currentValue) =>
+            Math.max(0, (currentValue ?? 0) + boundedElapsedSeconds),
+          );
+        }
 
         setSnapshot((currentSnapshot) => {
           const normalizedSnapshot = normalizeSnapshotForToday(
@@ -146,14 +167,10 @@ export function useActiveTime(): UseActiveTimeResult {
             new Date(now),
           );
           // Clamp long gaps so a suspended tab or a stalled timer cannot overcount activity.
-          const boundedElapsedSeconds = Math.min(
-            elapsedSeconds,
-            MAX_ELAPSED_SECONDS,
-          );
 
           if (
             boundedElapsedSeconds === 0 ||
-            latestIdleSeconds >= ACTIVE_IDLE_THRESHOLD_SECONDS
+            nextIsIdle
           ) {
             if (normalizedSnapshot !== currentSnapshot) {
               writeSnapshot(normalizedSnapshot);
@@ -176,6 +193,8 @@ export function useActiveTime(): UseActiveTimeResult {
         });
       } catch {
         if (!isCancelled) {
+          setInactiveSeconds(null);
+          setIsIdle(false);
           setIsTrackingAvailable(false);
         }
       }
@@ -231,7 +250,8 @@ export function useActiveTime(): UseActiveTimeResult {
   return {
     todayActiveSeconds: snapshot.todayActiveSeconds,
     totalActiveSeconds: snapshot.totalActiveSeconds,
-    idleSeconds,
+    inactiveSeconds,
+    isIdle,
     isTrackingAvailable,
     resetTodayActiveSeconds,
     resetTotalActiveSeconds,

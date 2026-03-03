@@ -9,8 +9,10 @@ import {
   filterNotes,
   getPinnedNotes,
   getRegularNotes,
+  sortNotes,
 } from '../lib/noteSelectors';
 import type { CreateNoteInput, Note, UpdateNoteInput } from '../types/note';
+import type { NoteSortDirection, NoteSortField } from '../types/settings';
 
 type UseNotesResult = {
   notes: Note[];
@@ -26,7 +28,10 @@ type UseNotesResult = {
   removeNote: (id: string) => Promise<boolean>;
 };
 
-export function useNotes(): UseNotesResult {
+export function useNotes(
+  sortField: NoteSortField,
+  sortDirection: NoteSortDirection,
+): UseNotesResult {
   const [notes, setNotes] = useState<Note[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -50,7 +55,11 @@ export function useNotes(): UseNotesResult {
   }, []);
 
   // Keep the hook return value fully derived so the page component stays focused on layout only.
-  const visibleNotes = filterNotes(notes, searchQuery);
+  const visibleNotes = sortNotes(
+    filterNotes(notes, searchQuery),
+    sortField,
+    sortDirection,
+  );
   const isFiltering = searchQuery.trim().length > 0;
 
   async function addNote(input: CreateNoteInput): Promise<Note> {

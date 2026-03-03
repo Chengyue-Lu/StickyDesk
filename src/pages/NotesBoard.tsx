@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import NoteComposer from '../components/notes/NoteComposer';
 import NotesFloatingStats from '../components/notes/NotesFloatingStats';
 import NotesHero from '../components/notes/NotesHero';
@@ -7,16 +7,25 @@ import NotesSection from '../components/notes/NotesSection';
 import NotesToolbar from '../components/notes/NotesToolbar';
 import WindowOverlayControls from '../components/notes/WindowOverlayControls';
 import { useActiveTime } from '../hooks/useActiveTime';
+import { useAppSettings } from '../hooks/useAppSettings';
 import { useNotes } from '../hooks/useNotes';
 import type { CreateNoteInput } from '../types/note';
 
 function NotesBoard() {
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
+  const [isVisualShellReady, setIsVisualShellReady] = useState(false);
+  const {
+    settings,
+    updateTheme,
+    updateAlwaysOnTop,
+    updateNoteSort,
+  } = useAppSettings();
   const {
     todayActiveSeconds,
     totalActiveSeconds,
-    idleSeconds,
+    inactiveSeconds,
+    isIdle,
     isTrackingAvailable,
     resetTodayActiveSeconds,
     resetTotalActiveSeconds,
@@ -33,7 +42,29 @@ function NotesBoard() {
     addNote,
     editNote,
     removeNote,
-  } = useNotes();
+  } = useNotes(settings.noteSort.field, settings.noteSort.direction);
+
+  useEffect(() => {
+    let isCancelled = false;
+    let revealTimerId = 0;
+
+    const frameId = window.requestAnimationFrame(() => {
+      revealTimerId = window.setTimeout(() => {
+        if (!isCancelled) {
+          setIsVisualShellReady(true);
+        }
+      }, 120);
+    });
+
+    return () => {
+      isCancelled = true;
+      window.cancelAnimationFrame(frameId);
+
+      if (revealTimerId) {
+        window.clearTimeout(revealTimerId);
+      }
+    };
+  }, []);
 
   async function handleCreateNote(input: CreateNoteInput) {
     await addNote(input);
@@ -56,14 +87,20 @@ function NotesBoard() {
   }
 
   return (
-    <main className="app-shell">
-      <WindowOverlayControls />
+    <main className={isVisualShellReady ? 'app-shell' : 'app-shell app-shell-booting'}>
+      <WindowOverlayControls
+        settings={settings}
+        onThemeChange={updateTheme}
+        onAlwaysOnTopChange={updateAlwaysOnTop}
+        onNoteSortChange={updateNoteSort}
+      />
       <div className="app-scroll-region">
         <section className="workspace">
           <NotesHero
             todayActiveSeconds={todayActiveSeconds}
             totalActiveSeconds={totalActiveSeconds}
-            idleSeconds={idleSeconds}
+            inactiveSeconds={inactiveSeconds}
+            isIdle={isIdle}
             isTrackingAvailable={isTrackingAvailable}
             onResetTodayActiveSeconds={resetTodayActiveSeconds}
             onResetTotalActiveSeconds={resetTotalActiveSeconds}

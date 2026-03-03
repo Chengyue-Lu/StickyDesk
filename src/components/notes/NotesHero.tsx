@@ -1,7 +1,8 @@
 type NotesHeroProps = {
   todayActiveSeconds: number;
   totalActiveSeconds: number;
-  idleSeconds: number | null;
+  inactiveSeconds: number | null;
+  isIdle: boolean;
   isTrackingAvailable: boolean;
   onResetTodayActiveSeconds: () => void;
   onResetTotalActiveSeconds: () => void;
@@ -45,28 +46,30 @@ function formatTotalDuration(totalSeconds: number): string {
 }
 
 function getStatusLabel(
-  idleSeconds: number | null,
+  inactiveSeconds: number | null,
+  isIdle: boolean,
   isTrackingAvailable: boolean,
 ): string {
   if (!isTrackingAvailable) {
     return 'Tracking unavailable';
   }
 
-  if (idleSeconds === null) {
+  if (inactiveSeconds === null) {
     return 'Syncing...';
   }
 
-  if (idleSeconds < 60) {
+  if (!isIdle) {
     return 'Active now';
   }
 
-  return `Idle ${formatStatusDuration(idleSeconds)}`;
+  return `Idle ${formatStatusDuration(inactiveSeconds)}`;
 }
 
 function NotesHero({
   todayActiveSeconds,
   totalActiveSeconds,
-  idleSeconds,
+  inactiveSeconds,
+  isIdle,
   isTrackingAvailable,
   onResetTodayActiveSeconds,
   onResetTotalActiveSeconds,
@@ -88,7 +91,7 @@ function NotesHero({
               : 'activity-status activity-status-offline'
           }
         >
-          {getStatusLabel(idleSeconds, isTrackingAvailable)}
+          {getStatusLabel(inactiveSeconds, isIdle, isTrackingAvailable)}
         </span>
         <button
           type="button"

@@ -1,6 +1,6 @@
 {
   "name": "sticky-notes",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "lcy",
   "private": true,
   "description": "Minimal Electron + React shell for StickyDesk.",
@@ -11,6 +11,7 @@
     "dev:electron": "set \"ELECTRON_RUN_AS_NODE=\" && wait-on tcp:5173 && electron .",
     "build": "vite build",
     "package:win": "npm run build && electron-builder --win portable",
+    "package:win:dir": "npm run build && electron-builder --win --dir",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

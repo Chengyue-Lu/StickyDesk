@@ -14,3 +14,17 @@ createRoot(rootElement).render(
     <App />
   </StrictMode>,
 );
+
+const bootShell = document.getElementById('boot-shell');
+
+if (bootShell) {
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      bootShell.dataset.hidden = 'true';
+
+      window.setTimeout(() => {
+        bootShell.remove();
+      }, 220);
+    });
+  });
+}

@@ -2,47 +2,60 @@
 
 [Chinese](./README_CN.md)
 
-StickyDesk is a compact desktop notes panel built with Electron, React, and Vite.
-It is designed as a narrow side panel for quick capture, quick review, and lightweight focus support on the desktop.
+StickyDesk is a compact desktop notes side panel built with Electron, React, and Vite.
+It focuses on fast capture, quick scanning, and a lightweight desktop companion workflow inside a narrow frameless window.
 
-> Status: `v0.1` prototype release. The core shell is usable and local note persistence is in place, but tasks and advanced settings are still planned work.
+> Status: `v0.2.0` prototype release. The core notes workflow, local persistence, basic personalization, and release packaging are in place.
 
 ## Current Features
 
 ### Notes
 
-- Narrow sticky-panel layout optimized for desktop side placement
-- Local JSON note persistence (`data/notes.json`)
-- Create new notes from the inline composer
-- Single-note expand / collapse interaction
+- Local JSON note persistence in `data/notes.json`
+- Inline note creation
+- Single-note expand / collapse behavior
 - Inline editing for title, content, and tags
 - Delete notes from the expanded state
 - Pin toggle for moving notes between pinned and regular sections
-- Fast search across title, content, and tags
+- Search across title, content, and tags
+- Sort by creation time or modification time
+- New-to-old and old-to-new sort directions
 
 ### Activity Tracking
 
-- Tracks active time using Electron `powerMonitor.getSystemIdleTime()`
-- Shows `Today` and `Total` active time
-- Tracks current state (`Active now`, `Idle`, or unavailable)
-- Reset actions for daily and total counters
-- Activity counters are persisted in `localStorage`
+- Active time tracking through Electron `powerMonitor.getSystemIdleTime()`
+- `Today` and `Total` active counters
+- Idle detection threshold set to 20 seconds
+- Idle timer resets to `0s` when the app first enters the idle state
+- Daily and total reset actions
 
 ### Window Shell
 
 - Frameless translucent desktop panel
-- Floating custom controls for settings, minimize, and close
-- Built-in window size presets
-- `Always on Top` toggle
+- Floating controls for settings, minimize, and close
+- Manual window width / height input with bounds enforcement
+- Window size persistence in `data/settings.json`
+- `Always on Top` toggle with persistence
+- Startup shell that shows earlier while the renderer finishes loading
 - Hidden native scrollbars for a cleaner compact layout
-- Windows portable packaging output is supported
+
+### Themes
+
+- Five built-in themes:
+  - White
+  - Soft Yellow
+  - Soft Blue
+  - Soft Green
+  - Soft Purple
+- Theme choice persists in `data/settings.json`
+- Major panels reuse the same theme variables so the whole shell shifts together
 
 ## Current Limitations
 
-- The settings popover still contains placeholder options for theme and sort rules
-- There is no countdown task system yet
-- There is no system tray integration yet
-- The portable single-file build can feel slower to launch or close because it extracts and cleans up temporary runtime files
+- There is no countdown / focus timer yet
+- There is no tray integration yet
+- Portable single-file builds still start slower than unpacked builds because they must extract to a temporary directory before launch
+- Electron remains the main source of package size; the runtime is much larger than the app code itself
 
 ## Tech Stack
 
@@ -50,18 +63,20 @@ It is designed as a narrow side panel for quick capture, quick review, and light
 - React 19
 - TypeScript
 - Vite
-- Storage: local JSON first; SQLite remains an optional future upgrade if the app later needs heavier querying or indexing
+- Local JSON for notes and settings
 
 ## Project Structure
 
-- `main.cjs`: Electron main process, local JSON storage, and IPC handlers
+- `main.cjs`: Electron main process, JSON storage, and IPC
 - `preload.cjs`: secure renderer bridge
-- `src/pages/NotesBoard.tsx`: main screen composition
-- `src/components/notes/`: note board UI, composer, cards, and window controls
-- `src/hooks/useActiveTime.ts`: active time tracking logic
-- `src/hooks/useNotes.ts`: note loading, filtering, and note mutations
+- `src/pages/NotesBoard.tsx`: main board composition
+- `src/components/notes/`: note cards, composer, toolbar, hero, and window controls
+- `src/hooks/useActiveTime.ts`: active / idle tracking
+- `src/hooks/useAppSettings.ts`: renderer-side settings state
+- `src/hooks/useNotes.ts`: note loading, filtering, sorting, and mutations
 - `src/data/notes.ts`: renderer-side note I/O adapter
-- `data/notes.json`: runtime note storage file (created automatically when missing)
+- `data/notes.json`: runtime notes storage (auto-created)
+- `data/settings.json`: runtime settings storage (auto-created)
 
 ## Development
 
@@ -84,26 +99,33 @@ npm run typecheck
 npm run build
 ```
 
-### Package (Windows Portable)
+### Package
+
+Windows portable:
 
 ```bash
 npm run package:win
 ```
 
+Windows unpacked directory:
+
+```bash
+npm run package:win:dir
+```
+
 ## Roadmap
 
-### Next (`v0.2`)
+### Next
 
-- [ ] Improve startup and shutdown speed, especially for portable builds
-- [ ] Reduce the rendering cost of the translucent shell where possible
 - [ ] Add short countdown / focus timers
-- [ ] Turn theme and sort placeholders into real settings
+- [ ] Add tray integration and background controls
+- [ ] Add import / export for notes and settings
+- [ ] Keep trimming cold-start overhead where it does not compromise the current visual shell
 
 ### Later
 
-- [ ] Add tray integration and background controls
-- [ ] Add import / export for notes and settings
-- [ ] Revisit SQLite only if local JSON becomes a limitation
+- [ ] Revisit richer note metadata and filtering
+- [ ] Re-evaluate SQLite only if local JSON becomes a clear limitation
 
 ## License
 

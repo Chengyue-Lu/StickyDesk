@@ -4,6 +4,17 @@ const { randomUUID } = require('node:crypto');
 const { app, BrowserWindow, ipcMain, powerMonitor } = require('electron');
 
 const NOTES_FILE_NAME = 'notes.json';
+const SETTINGS_FILE_NAME = 'settings.json';
+const MIN_WINDOW_WIDTH = 360;
+const MIN_WINDOW_HEIGHT = 720;
+const MAX_WINDOW_WIDTH = MIN_WINDOW_WIDTH * 3;
+const MAX_WINDOW_HEIGHT = 2160;
+const DEFAULT_THEME_ID = 'white';
+const VALID_THEME_IDS = new Set(['white', 'yellow', 'blue', 'green', 'purple']);
+const DEFAULT_NOTE_SORT_FIELD = 'createdAt';
+const DEFAULT_NOTE_SORT_DIRECTION = 'desc';
+const VALID_NOTE_SORT_FIELDS = new Set(['createdAt', 'updatedAt']);
+const VALID_NOTE_SORT_DIRECTIONS = new Set(['desc', 'asc']);
 
 function getSenderWindow(event) {
   return BrowserWindow.fromWebContents(event.sender);
@@ -82,6 +93,132 @@ function getDataDirectory() {
 
 function getNotesFilePath() {
   return path.join(getDataDirectory(), NOTES_FILE_NAME);
+}
+
+function getSettingsFilePath() {
+  return path.join(getDataDirectory(), SETTINGS_FILE_NAME);
+}
+
+function clampWindowWidth(value) {
+  return Math.min(
+    MAX_WINDOW_WIDTH,
+    Math.max(MIN_WINDOW_WIDTH, Math.round(Number(value))),
+  );
+}
+
+function clampWindowHeight(value) {
+  return Math.min(
+    MAX_WINDOW_HEIGHT,
+    Math.max(MIN_WINDOW_HEIGHT, Math.round(Number(value))),
+  );
+}
+
+function normalizeThemeId(value) {
+  return VALID_THEME_IDS.has(value) ? value : DEFAULT_THEME_ID;
+}
+
+function normalizeNoteSortField(value) {
+  return VALID_NOTE_SORT_FIELDS.has(value) ? value : DEFAULT_NOTE_SORT_FIELD;
+}
+
+function normalizeNoteSortDirection(value) {
+  return VALID_NOTE_SORT_DIRECTIONS.has(value)
+    ? value
+    : DEFAULT_NOTE_SORT_DIRECTION;
+}
+
+function getDefaultSettings() {
+  return {
+    version: 1,
+    themeId: DEFAULT_THEME_ID,
+    alwaysOnTop: false,
+    window: {
+      width: MIN_WINDOW_WIDTH,
+      height: MIN_WINDOW_HEIGHT,
+    },
+    noteSort: {
+      field: DEFAULT_NOTE_SORT_FIELD,
+      direction: DEFAULT_NOTE_SORT_DIRECTION,
+    },
+  };
+}
+
+function normalizeSettingsRecord(settings) {
+  const fallback = getDefaultSettings();
+  const candidateWindow = settings?.window;
+
+  return {
+    version: 1,
+    themeId: normalizeThemeId(settings?.themeId),
+    alwaysOnTop: Boolean(settings?.alwaysOnTop),
+    window: {
+      width:
+        Number.isFinite(Number(candidateWindow?.width))
+          ? clampWindowWidth(candidateWindow.width)
+          : fallback.window.width,
+      height:
+        Number.isFinite(Number(candidateWindow?.height))
+          ? clampWindowHeight(candidateWindow.height)
+          : fallback.window.height,
+    },
+    noteSort: {
+      field: normalizeNoteSortField(settings?.noteSort?.field),
+      direction: normalizeNoteSortDirection(settings?.noteSort?.direction),
+    },
+  };
+}
+
+function writeSettingsFileSync(settings) {
+  fs.writeFileSync(
+    getSettingsFilePath(),
+    JSON.stringify(settings, null, 2),
+    'utf8',
+  );
+}
+
+function ensureSettingsFileSync() {
+  const settingsFilePath = getSettingsFilePath();
+
+  if (fs.existsSync(settingsFilePath)) {
+    return settingsFilePath;
+  }
+
+  writeSettingsFileSync(getDefaultSettings());
+
+  return settingsFilePath;
+}
+
+function readSettingsFileSync() {
+  const settingsFilePath = ensureSettingsFileSync();
+
+  try {
+    const rawValue = fs.readFileSync(settingsFilePath, 'utf8');
+    const parsedValue = JSON.parse(rawValue);
+    const normalizedSettings = normalizeSettingsRecord(parsedValue);
+
+    writeSettingsFileSync(normalizedSettings);
+
+    return normalizedSettings;
+  } catch (error) {
+    console.warn('StickyDesk: failed to read settings JSON, recreating defaults.');
+
+    const defaultSettings = getDefaultSettings();
+    writeSettingsFileSync(defaultSettings);
+
+    return defaultSettings;
+  }
+}
+
+function persistWindowSettings(width, height) {
+  const currentSettings = readSettingsFileSync();
+
+  writeSettingsFileSync({
+    ...currentSettings,
+    window: {
+      width: clampWindowWidth(width),
+      height: clampWindowHeight(height),
+    },
+  });
 }
 
 function normalizeString(value, fallback = '') {
@@ -245,12 +382,15 @@ function updateNoteRecord(note, input) {
 }
 
 async function createWindow() {
+  const appSettings = readSettingsFileSync();
+
   // Keep the desktop shell narrow so it behaves more like a sticky panel than a full app window.
   const mainWindow = new BrowserWindow({
-    width: 440,
-    height: 980,
-    minWidth: 360,
-    minHeight: 640,
+    width: appSettings.window.width,
+    height: appSettings.window.height,
+    minWidth: MIN_WINDOW_WIDTH,
+    minHeight: MIN_WINDOW_HEIGHT,
+    alwaysOnTop: appSettings.alwaysOnTop,
     show: false,
     frame: false,
     resizable: true,
@@ -268,6 +408,11 @@ async function createWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
+  mainWindow.on('resized', () => {
+    const currentBounds = mainWindow.getBounds();
+
+    persistWindowSettings(currentBounds.width, currentBounds.height);
+  });
   mainWindow.webContents.on(
     'did-fail-load',
     (_event, errorCode, errorDescription, validatedURL) => {
@@ -281,23 +426,24 @@ async function createWindow() {
     },
   );
 
+  const loadRenderer = app.isPackaged
+    ? mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'))
+    : mainWindow.loadURL('http://127.0.0.1:5173');
+
+  // Show the shell immediately instead of waiting for the renderer to finish booting.
+  if (!mainWindow.isVisible()) {
+    mainWindow.show();
+  }
+
   if (!app.isPackaged) {
     // In development the renderer is served by Vite; in production we load the built HTML file.
-    await mainWindow.loadURL('http://127.0.0.1:5173');
-
-    if (!mainWindow.isVisible()) {
-      mainWindow.show();
-    }
+    await loadRenderer;
 
     mainWindow.webContents.openDevTools({ mode: 'detach' });
     return;
   }
 
-  await mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
-
-  if (!mainWindow.isVisible()) {
-    mainWindow.show();
-  }
+  await loadRenderer;
 }
 
 app.whenReady().then(() => {
@@ -318,12 +464,15 @@ app.whenReady().then(() => {
       return null;
     }
 
-    const safeWidth = Math.min(760, Math.max(360, Math.round(Number(width))));
-    const safeHeight = Math.min(1400, Math.max(640, Math.round(Number(height))));
+    const requestedWidth = Math.round(Number(width));
+    const requestedHeight = Math.round(Number(height));
 
-    if (!Number.isFinite(safeWidth) || !Number.isFinite(safeHeight)) {
+    if (!Number.isFinite(requestedWidth) || !Number.isFinite(requestedHeight)) {
       return null;
     }
+
+    const safeWidth = clampWindowWidth(requestedWidth);
+    const safeHeight = clampWindowHeight(requestedHeight);
 
     const currentBounds = targetWindow.getBounds();
 
@@ -333,7 +482,10 @@ app.whenReady().then(() => {
       height: safeHeight,
     });
 
-    return targetWindow.getBounds();
+    const nextBounds = targetWindow.getBounds();
+    persistWindowSettings(nextBounds.width, nextBounds.height);
+
+    return nextBounds;
   });
   ipcMain.handle('window:set-always-on-top', (event, value) => {
     const targetWindow = getSenderWindow(event);
@@ -343,8 +495,60 @@ app.whenReady().then(() => {
     }
 
     targetWindow.setAlwaysOnTop(Boolean(value));
+    const appliedValue = targetWindow.isAlwaysOnTop();
+    const currentSettings = readSettingsFileSync();
 
-    return targetWindow.isAlwaysOnTop();
+    writeSettingsFileSync({
+      ...currentSettings,
+      alwaysOnTop: appliedValue,
+    });
+
+    return appliedValue;
+  });
+  ipcMain.handle('settings:get', () => {
+    const settings = readSettingsFileSync();
+
+    return {
+      themeId: settings.themeId,
+      alwaysOnTop: settings.alwaysOnTop,
+      window: settings.window,
+      noteSort: settings.noteSort,
+    };
+  });
+  ipcMain.handle('settings:set-theme', (_, themeId) => {
+    const currentSettings = readSettingsFileSync();
+    const nextSettings = {
+      ...currentSettings,
+      themeId: normalizeThemeId(themeId),
+    };
+
+    writeSettingsFileSync(nextSettings);
+
+    return {
+      themeId: nextSettings.themeId,
+      alwaysOnTop: nextSettings.alwaysOnTop,
+      window: nextSettings.window,
+      noteSort: nextSettings.noteSort,
+    };
+  });
+  ipcMain.handle('settings:set-note-sort', (_, field, direction) => {
+    const currentSettings = readSettingsFileSync();
+    const nextSettings = {
+      ...currentSettings,
+      noteSort: {
+        field: normalizeNoteSortField(field),
+        direction: normalizeNoteSortDirection(direction),
+      },
+    };
+
+    writeSettingsFileSync(nextSettings);
+
+    return {
+      themeId: nextSettings.themeId,
+      alwaysOnTop: nextSettings.alwaysOnTop,
+      window: nextSettings.window,
+      noteSort: nextSettings.noteSort,
+    };
   });
   ipcMain.handle('notes:list', async () => readNotesFile());
   ipcMain.handle('notes:create', async (_, input) => {
