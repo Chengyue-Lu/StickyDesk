@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "StickyDesk Tauri",
-  "version": "0.1.0",
+  "productName": "StickyDesk",
+  "version": "1.0.0",
   "identifier": "com.lcy.stickydesk.tauri",
   "build": {
     "frontendDist": "../dist",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "StickyDesk Tauri",
+        "title": "StickyDesk",
         "width": 360,
         "height": 720,
         "minWidth": 360,

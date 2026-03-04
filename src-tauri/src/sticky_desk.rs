@@ -128,7 +128,7 @@ fn lock_storage(storage: &StorageState) -> CommandResult<MutexGuard<'_, ()>> {
     storage
         .lock
         .lock()
-        .map_err(|_| "StickyDesk Tauri: storage lock is poisoned.".to_string())
+        .map_err(|_| "StickyDesk: storage lock is poisoned.".to_string())
 }
 
 fn with_storage_lock<T>(
@@ -143,11 +143,11 @@ fn ensure_data_dir(app: &AppHandle) -> CommandResult<PathBuf> {
     let data_dir = app
         .path()
         .app_local_data_dir()
-        .map_err(|error| format!("StickyDesk Tauri: failed to resolve app data dir: {error}"))?
+        .map_err(|error| format!("StickyDesk: failed to resolve app data dir: {error}"))?
         .join("data");
 
     fs::create_dir_all(&data_dir)
-        .map_err(|error| format!("StickyDesk Tauri: failed to create data dir: {error}"))?;
+        .map_err(|error| format!("StickyDesk: failed to create data dir: {error}"))?;
 
     Ok(data_dir)
 }
@@ -165,16 +165,16 @@ fn read_text_file_if_exists(app: &AppHandle, file_name: &str) -> CommandResult<O
 
     fs::read_to_string(&file_path)
         .map(Some)
-        .map_err(|error| format!("StickyDesk Tauri: failed to read {file_name}: {error}"))
+        .map_err(|error| format!("StickyDesk: failed to read {file_name}: {error}"))
 }
 
 fn write_json_file<T: Serialize>(app: &AppHandle, file_name: &str, value: &T) -> CommandResult<()> {
     let file_path = data_file_path(app, file_name)?;
     let serialized = serde_json::to_string_pretty(value)
-        .map_err(|error| format!("StickyDesk Tauri: failed to serialize {file_name}: {error}"))?;
+        .map_err(|error| format!("StickyDesk: failed to serialize {file_name}: {error}"))?;
 
     fs::write(&file_path, serialized)
-        .map_err(|error| format!("StickyDesk Tauri: failed to write {file_name}: {error}"))
+        .map_err(|error| format!("StickyDesk: failed to write {file_name}: {error}"))
 }
 
 fn format_timestamp(date: DateTime<Local>) -> String {
@@ -566,7 +566,7 @@ fn read_settings_unlocked(app: &AppHandle) -> CommandResult<AppSettings> {
     let settings = match serde_json::from_str::<Value>(&raw_text) {
         Ok(value) => normalize_settings_from_value(&value),
         Err(error) => {
-            log::warn!("StickyDesk Tauri: failed to parse settings JSON: {error}");
+            log::warn!("StickyDesk: failed to parse settings JSON: {error}");
             default_settings()
         }
     };
@@ -596,7 +596,7 @@ fn read_notes_unlocked(app: &AppHandle) -> CommandResult<Vec<Note>> {
             .map(normalize_notes_collection)
             .unwrap_or_else(default_notes),
         Err(error) => {
-            log::warn!("StickyDesk Tauri: failed to parse notes JSON: {error}");
+            log::warn!("StickyDesk: failed to parse notes JSON: {error}");
             default_notes()
         }
     };
@@ -626,7 +626,7 @@ fn read_future_tasks_unlocked(app: &AppHandle) -> CommandResult<Vec<FutureTask>>
             .map(normalize_future_tasks_collection)
             .unwrap_or_else(default_future_tasks),
         Err(error) => {
-            log::warn!("StickyDesk Tauri: failed to parse future tasks JSON: {error}");
+            log::warn!("StickyDesk: failed to parse future tasks JSON: {error}");
             default_future_tasks()
         }
     };
@@ -731,13 +731,13 @@ fn persist_window_size(
 fn read_window_bounds(window: &Window) -> CommandResult<WindowBounds> {
     let scale_factor = window
         .scale_factor()
-        .map_err(|error| format!("StickyDesk Tauri: failed to read scale factor: {error}"))?;
+        .map_err(|error| format!("StickyDesk: failed to read scale factor: {error}"))?;
     let position = window
         .outer_position()
-        .map_err(|error| format!("StickyDesk Tauri: failed to read window position: {error}"))?;
+        .map_err(|error| format!("StickyDesk: failed to read window position: {error}"))?;
     let size = window
         .inner_size()
-        .map_err(|error| format!("StickyDesk Tauri: failed to read window size: {error}"))?;
+        .map_err(|error| format!("StickyDesk: failed to read window size: {error}"))?;
     let logical_position = position.to_logical::<f64>(scale_factor);
     let logical_size = size.to_logical::<f64>(scale_factor);
 
@@ -766,11 +766,11 @@ pub fn apply_saved_window_preferences(app: &AppHandle) {
         f64::from(settings.window.width),
         f64::from(settings.window.height),
     ))) {
-        log::warn!("StickyDesk Tauri: failed to apply saved window size: {error}");
+        log::warn!("StickyDesk: failed to apply saved window size: {error}");
     }
 
     if let Err(error) = window.set_always_on_top(settings.always_on_top) {
-        log::warn!("StickyDesk Tauri: failed to apply always-on-top: {error}");
+        log::warn!("StickyDesk: failed to apply always-on-top: {error}");
     }
 }
 
@@ -799,14 +799,14 @@ pub fn handle_window_event(window: &Window, event: &WindowEvent) {
 pub fn minimize_window(window: Window) -> CommandResult<()> {
     window
         .minimize()
-        .map_err(|error| format!("StickyDesk Tauri: failed to minimize window: {error}"))
+        .map_err(|error| format!("StickyDesk: failed to minimize window: {error}"))
 }
 
 #[tauri::command]
 pub fn close_window(window: Window) -> CommandResult<()> {
     window
         .close()
-        .map_err(|error| format!("StickyDesk Tauri: failed to close window: {error}"))
+        .map_err(|error| format!("StickyDesk: failed to close window: {error}"))
 }
 
 #[tauri::command]
@@ -824,7 +824,7 @@ pub fn set_window_size(
             f64::from(safe_width),
             f64::from(safe_height),
         )))
-        .map_err(|error| format!("StickyDesk Tauri: failed to resize window: {error}"))?;
+        .map_err(|error| format!("StickyDesk: failed to resize window: {error}"))?;
 
     persist_window_size(&window.app_handle(), &state, safe_width, safe_height)?;
 
@@ -844,7 +844,7 @@ pub fn set_always_on_top(
 ) -> CommandResult<bool> {
     window
         .set_always_on_top(value)
-        .map_err(|error| format!("StickyDesk Tauri: failed to toggle always-on-top: {error}"))?;
+        .map_err(|error| format!("StickyDesk: failed to toggle always-on-top: {error}"))?;
 
     let applied_value = window.is_always_on_top().unwrap_or(value);
 
@@ -859,13 +859,13 @@ pub fn set_always_on_top(
 pub fn is_cursor_inside_window(window: Window) -> CommandResult<bool> {
     let cursor = window
         .cursor_position()
-        .map_err(|error| format!("StickyDesk Tauri: failed to read cursor position: {error}"))?;
+        .map_err(|error| format!("StickyDesk: failed to read cursor position: {error}"))?;
     let position = window
         .outer_position()
-        .map_err(|error| format!("StickyDesk Tauri: failed to read window position: {error}"))?;
+        .map_err(|error| format!("StickyDesk: failed to read window position: {error}"))?;
     let size = window
         .outer_size()
-        .map_err(|error| format!("StickyDesk Tauri: failed to read outer window size: {error}"))?;
+        .map_err(|error| format!("StickyDesk: failed to read outer window size: {error}"))?;
     let left = f64::from(position.x);
     let top = f64::from(position.y);
     let right = left + f64::from(size.width);
@@ -884,7 +884,7 @@ fn read_system_idle_seconds_windows() -> CommandResult<u64> {
     let did_read = unsafe { GetLastInputInfo(&mut input_info) };
 
     if did_read == 0 {
-        return Err("StickyDesk Tauri: failed to read last input info.".to_string());
+        return Err("StickyDesk: failed to read last input info.".to_string());
     }
 
     let now_tick = unsafe { GetTickCount64() };
@@ -903,7 +903,7 @@ pub fn get_idle_seconds() -> CommandResult<u64> {
 
     #[cfg(not(target_os = "windows"))]
     {
-        Err("StickyDesk Tauri: idle tracking is not implemented on this platform.".to_string())
+        Err("StickyDesk: idle tracking is not implemented on this platform.".to_string())
     }
 }
 

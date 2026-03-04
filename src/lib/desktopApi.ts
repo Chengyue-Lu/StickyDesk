@@ -41,7 +41,7 @@ async function invokeCommand<T>(
   args?: Record<string, unknown>,
 ): Promise<T> {
   if (!isTauriRuntimeAvailable()) {
-    throw new Error(`StickyDesk Tauri runtime is unavailable for ${command}.`);
+    throw new Error(`StickyDesk runtime is unavailable for ${command}.`);
   }
 
   return invoke<T>(command, args);

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import type { FocusTimerSession } from '../../hooks/useFocusTimer';
-import { triggerFocusReminder } from '../../lib/desktopApi';
 
 type NotesFloatingStatsProps = {
   totalItems: number;
@@ -123,10 +122,6 @@ function NotesFloatingStats({
 
     onDismissFocusTimer();
     setIsCancelConfirming(false);
-  }
-
-  function handleTestNotification() {
-    void triggerFocusReminder('Manual system notification test');
   }
 
   return (
@@ -257,13 +252,6 @@ function NotesFloatingStats({
             </div>
           </section>
         </div>
-        <button
-          type="button"
-          className="floating-reminder-test"
-          onClick={handleTestNotification}
-        >
-          Test
-        </button>
         <aside className="floating-stats" aria-label="Notes quick summary">
           <div className="floating-stat">
             <span className="floating-stat-label">Total</span>
