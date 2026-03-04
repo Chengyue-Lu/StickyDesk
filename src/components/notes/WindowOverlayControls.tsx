@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type {
   AppSettings,
   NoteSortDirection,
@@ -13,6 +13,9 @@ const MAX_WINDOW_HEIGHT = 2160;
 const MIN_UI_SCALE = 1;
 const MAX_UI_SCALE = 2;
 const UI_SCALE_STEP = 0.1;
+const MIN_SHELL_OPACITY = 0.2;
+const MAX_SHELL_OPACITY = 1;
+const SHELL_OPACITY_STEP = 0.05;
 
 const THEME_OPTIONS: Array<{
   id: ThemeId;
@@ -76,7 +79,9 @@ type WindowOverlayControlsProps = {
   settings: AppSettings;
   onThemeChange: (themeId: ThemeId) => Promise<void>;
   onUiScaleChange: (value: number) => Promise<void>;
+  onShellOpacityChange: (value: number) => Promise<void>;
   onAlwaysOnTopChange: (value: boolean) => Promise<boolean>;
+  onAutoFadeWhenInactiveChange: (value: boolean) => Promise<void>;
   onNoteSortChange: (
     field: NoteSortField,
     direction: NoteSortDirection,
@@ -107,13 +112,29 @@ function normalizeUiScaleInput(value: number): number {
   return Math.round(clampedValue * 10) / 10;
 }
 
+function normalizeShellOpacityInput(value: number): number {
+  if (!Number.isFinite(value)) {
+    return MAX_SHELL_OPACITY;
+  }
+
+  const clampedValue = Math.min(
+    MAX_SHELL_OPACITY,
+    Math.max(MIN_SHELL_OPACITY, value),
+  );
+
+  return Math.round(clampedValue * 100) / 100;
+}
+
 function WindowOverlayControls({
   settings,
   onThemeChange,
   onUiScaleChange,
+  onShellOpacityChange,
   onAlwaysOnTopChange,
+  onAutoFadeWhenInactiveChange,
   onNoteSortChange,
 }: WindowOverlayControlsProps) {
+  const overlayRef = useRef<HTMLDivElement | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [windowWidthInput, setWindowWidthInput] = useState(
     String(settings.window.width),
@@ -126,6 +147,32 @@ function WindowOverlayControls({
     setWindowWidthInput(String(settings.window.width));
     setWindowHeightInput(String(settings.window.height));
   }, [settings.window.height, settings.window.width]);
+
+  useEffect(() => {
+    if (!isSettingsOpen) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (overlayRef.current?.contains(target)) {
+        return;
+      }
+
+      setIsSettingsOpen(false);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [isSettingsOpen]);
 
   const handleToggleSettings = () => {
     setIsSettingsOpen((currentValue) => !currentValue);
@@ -165,6 +212,10 @@ function WindowOverlayControls({
     void onAlwaysOnTopChange(!settings.alwaysOnTop);
   };
 
+  const handleToggleAutoFadeWhenInactive = () => {
+    void onAutoFadeWhenInactiveChange(!settings.autoFadeWhenInactive);
+  };
+
   const handleToggleSortDirection = () => {
     const nextDirection: NoteSortDirection =
       settings.noteSort.direction === 'desc' ? 'asc' : 'desc';
@@ -181,7 +232,7 @@ function WindowOverlayControls({
   };
 
   return (
-    <div className="window-overlay">
+    <div ref={overlayRef} className="window-overlay">
       <div className="window-control-cluster" aria-label="Window controls">
         <button
           type="button"
@@ -230,8 +281,8 @@ function WindowOverlayControls({
         <div className="settings-group">
           <p className="settings-group-label">Window Size</p>
           <p className="settings-group-hint">
-            Width {MIN_WINDOW_WIDTH}-{MAX_WINDOW_WIDTH}px / Height{' '}
-            {MIN_WINDOW_HEIGHT}-{MAX_WINDOW_HEIGHT}px
+            {MIN_WINDOW_WIDTH}-{MAX_WINDOW_WIDTH}px wide /{' '}
+            {MIN_WINDOW_HEIGHT}-{MAX_WINDOW_HEIGHT}px high
           </p>
           <form
             className="settings-size-form"
@@ -240,39 +291,40 @@ function WindowOverlayControls({
               void handleApplyWindowSize();
             }}
           >
-            <div className="settings-size-inputs">
-              <label className="settings-size-field">
-                <span>Width</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={MIN_WINDOW_WIDTH}
-                  max={MAX_WINDOW_WIDTH}
-                  step={1}
-                  value={windowWidthInput}
-                  onChange={(event) => {
-                    setWindowWidthInput(event.target.value);
-                  }}
-                />
-              </label>
-              <label className="settings-size-field">
-                <span>Height</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={MIN_WINDOW_HEIGHT}
-                  max={MAX_WINDOW_HEIGHT}
-                  step={1}
-                  value={windowHeightInput}
-                  onChange={(event) => {
-                    setWindowHeightInput(event.target.value);
-                  }}
-                />
-              </label>
+            <div className="settings-size-inline">
+              <input
+                type="number"
+                inputMode="numeric"
+                min={MIN_WINDOW_WIDTH}
+                max={MAX_WINDOW_WIDTH}
+                step={1}
+                value={windowWidthInput}
+                className="settings-size-inline-input"
+                aria-label="Window width"
+                onChange={(event) => {
+                  setWindowWidthInput(event.target.value);
+                }}
+              />
+              <span className="settings-size-multiply" aria-hidden="true">
+                x
+              </span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={MIN_WINDOW_HEIGHT}
+                max={MAX_WINDOW_HEIGHT}
+                step={1}
+                value={windowHeightInput}
+                className="settings-size-inline-input"
+                aria-label="Window height"
+                onChange={(event) => {
+                  setWindowHeightInput(event.target.value);
+                }}
+              />
+              <button type="submit" className="settings-size-apply">
+                Apply
+              </button>
             </div>
-            <button type="submit" className="settings-size-apply">
-              Apply Size
-            </button>
           </form>
         </div>
         <div className="settings-group">
@@ -299,6 +351,25 @@ function WindowOverlayControls({
         </div>
         <div className="settings-group">
           <p className="settings-group-label">Window Layer</p>
+          <div className="settings-scale-row">
+            <input
+              type="range"
+              min={MIN_SHELL_OPACITY}
+              max={MAX_SHELL_OPACITY}
+              step={SHELL_OPACITY_STEP}
+              value={settings.shellOpacity}
+              className="settings-scale-slider"
+              aria-label="Backplate opacity"
+              onChange={(event) => {
+                void onShellOpacityChange(
+                  normalizeShellOpacityInput(Number(event.target.value)),
+                );
+              }}
+            />
+            <span className="settings-scale-value">
+              {Math.round(settings.shellOpacity * 100)}%
+            </span>
+          </div>
           <button
             type="button"
             className={
@@ -310,6 +381,18 @@ function WindowOverlayControls({
           >
             <span>Always on Top</span>
             <strong>{settings.alwaysOnTop ? 'On' : 'Off'}</strong>
+          </button>
+          <button
+            type="button"
+            className={
+              settings.autoFadeWhenInactive
+                ? 'settings-toggle-button settings-toggle-button-active'
+                : 'settings-toggle-button'
+            }
+            onClick={handleToggleAutoFadeWhenInactive}
+          >
+            <span>Auto Fade</span>
+            <strong>{settings.autoFadeWhenInactive ? 'On' : 'Off'}</strong>
           </button>
         </div>
         <div className="settings-group">

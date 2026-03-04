@@ -19,7 +19,6 @@ type UseNotesResult = {
   visibleNotes: Note[];
   visiblePinnedNotes: Note[];
   visibleRegularNotes: Note[];
-  pinnedCount: number;
   searchQuery: string;
   setSearchQuery: (value: string) => void;
   isFiltering: boolean;
@@ -104,7 +103,6 @@ export function useNotes(
     visibleNotes,
     visiblePinnedNotes: getPinnedNotes(visibleNotes),
     visibleRegularNotes: getRegularNotes(visibleNotes),
-    pinnedCount: getPinnedNotes(notes).length,
     searchQuery,
     setSearchQuery,
     isFiltering,

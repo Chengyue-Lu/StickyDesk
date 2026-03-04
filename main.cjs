@@ -1,9 +1,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-const { app, BrowserWindow, ipcMain, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, powerMonitor, screen } = require('electron');
 
 const NOTES_FILE_NAME = 'notes.json';
+const FUTURE_TASKS_FILE_NAME = 'future-tasks.json';
 const SETTINGS_FILE_NAME = 'settings.json';
 const MIN_WINDOW_WIDTH = 360;
 const MIN_WINDOW_HEIGHT = 720;
@@ -11,6 +12,8 @@ const MAX_WINDOW_WIDTH = MIN_WINDOW_WIDTH * 3;
 const MAX_WINDOW_HEIGHT = 2160;
 const MIN_UI_SCALE = 1;
 const MAX_UI_SCALE = 2;
+const MIN_SHELL_OPACITY = 0.2;
+const MAX_SHELL_OPACITY = 1;
 const DEFAULT_THEME_ID = 'white';
 const VALID_THEME_IDS = new Set(['white', 'yellow', 'blue', 'green', 'purple']);
 const DEFAULT_NOTE_SORT_FIELD = 'createdAt';
@@ -77,6 +80,10 @@ function getDefaultNotes() {
   ];
 }
 
+function getDefaultFutureTasks() {
+  return [];
+}
+
 function getStorageRootDirectory() {
   if (!app.isPackaged) {
     return __dirname;
@@ -95,6 +102,10 @@ function getDataDirectory() {
 
 function getNotesFilePath() {
   return path.join(getDataDirectory(), NOTES_FILE_NAME);
+}
+
+function getFutureTasksFilePath() {
+  return path.join(getDataDirectory(), FUTURE_TASKS_FILE_NAME);
 }
 
 function getSettingsFilePath() {
@@ -131,6 +142,21 @@ function clampUiScale(value) {
   return Math.round(clampedValue * 10) / 10;
 }
 
+function clampShellOpacity(value) {
+  const numericValue = Number(value);
+
+  if (!Number.isFinite(numericValue)) {
+    return MAX_SHELL_OPACITY;
+  }
+
+  const clampedValue = Math.min(
+    MAX_SHELL_OPACITY,
+    Math.max(MIN_SHELL_OPACITY, numericValue),
+  );
+
+  return Math.round(clampedValue * 100) / 100;
+}
+
 function normalizeNoteSortField(value) {
   return VALID_NOTE_SORT_FIELDS.has(value) ? value : DEFAULT_NOTE_SORT_FIELD;
 }
@@ -146,7 +172,9 @@ function getDefaultSettings() {
     version: 1,
     themeId: DEFAULT_THEME_ID,
     uiScale: MIN_UI_SCALE,
+    shellOpacity: MAX_SHELL_OPACITY,
     alwaysOnTop: false,
+    autoFadeWhenInactive: true,
     window: {
       width: MIN_WINDOW_WIDTH,
       height: MIN_WINDOW_HEIGHT,
@@ -166,7 +194,12 @@ function normalizeSettingsRecord(settings) {
     version: 1,
     themeId: normalizeThemeId(settings?.themeId),
     uiScale: clampUiScale(settings?.uiScale),
+    shellOpacity: clampShellOpacity(settings?.shellOpacity),
     alwaysOnTop: Boolean(settings?.alwaysOnTop),
+    autoFadeWhenInactive:
+      typeof settings?.autoFadeWhenInactive === 'boolean'
+        ? settings.autoFadeWhenInactive
+        : fallback.autoFadeWhenInactive,
     window: {
       width:
         Number.isFinite(Number(candidateWindow?.width))
@@ -258,6 +291,12 @@ function normalizeTags(value) {
     .filter(Boolean);
 }
 
+function normalizeFutureTaskTitle(value, fallback = 'Untitled task') {
+  const normalizedValue = normalizeString(value, '').trim();
+
+  return normalizedValue || fallback;
+}
+
 function isValidTimestamp(value) {
   return (
     typeof value === 'string' &&
@@ -298,6 +337,33 @@ function normalizeNotesCollection(notes) {
     .filter(Boolean);
 }
 
+function normalizeFutureTaskRecord(task, index) {
+  if (!task || typeof task !== 'object') {
+    return null;
+  }
+
+  const fallbackDueAt = formatTimestamp(new Date(Date.now() + 60 * 60 * 1000));
+  const fallbackCreatedAt = formatTimestamp(new Date());
+
+  return {
+    id:
+      typeof task.id === 'string' && task.id.trim()
+        ? task.id
+        : `future-task-${index + 1}-${randomUUID()}`,
+    title: normalizeFutureTaskTitle(task.title),
+    dueAt: isValidTimestamp(task.dueAt) ? formatTimestamp(new Date(task.dueAt)) : fallbackDueAt,
+    createdAt: isValidTimestamp(task.createdAt)
+      ? formatTimestamp(new Date(task.createdAt))
+      : fallbackCreatedAt,
+  };
+}
+
+function normalizeFutureTasksCollection(tasks) {
+  return tasks
+    .map((task, index) => normalizeFutureTaskRecord(task, index))
+    .filter(Boolean);
+}
+
 async function writeNotesFile(notes) {
   const payload = {
     version: 1,
@@ -306,6 +372,19 @@ async function writeNotesFile(notes) {
 
   await fs.promises.writeFile(
     getNotesFilePath(),
+    JSON.stringify(payload, null, 2),
+    'utf8',
+  );
+}
+
+async function writeFutureTasksFile(tasks) {
+  const payload = {
+    version: 1,
+    tasks,
+  };
+
+  await fs.promises.writeFile(
+    getFutureTasksFilePath(),
     JSON.stringify(payload, null, 2),
     'utf8',
   );
@@ -321,6 +400,18 @@ async function ensureNotesFile() {
   await writeNotesFile(getDefaultNotes());
 
   return notesFilePath;
+}
+
+async function ensureFutureTasksFile() {
+  const futureTasksFilePath = getFutureTasksFilePath();
+
+  if (fs.existsSync(futureTasksFilePath)) {
+    return futureTasksFilePath;
+  }
+
+  await writeFutureTasksFile(getDefaultFutureTasks());
+
+  return futureTasksFilePath;
 }
 
 async function readNotesFile() {
@@ -355,6 +446,40 @@ async function readNotesFile() {
   }
 }
 
+async function readFutureTasksFile() {
+  const futureTasksFilePath = await ensureFutureTasksFile();
+
+  try {
+    const rawValue = await fs.promises.readFile(futureTasksFilePath, 'utf8');
+    const parsedValue = JSON.parse(rawValue);
+    const candidateTasks = Array.isArray(parsedValue)
+      ? parsedValue
+      : Array.isArray(parsedValue?.tasks)
+        ? parsedValue.tasks
+        : null;
+
+    if (!candidateTasks) {
+      throw new Error('Invalid future tasks payload.');
+    }
+
+    const normalizedTasks = normalizeFutureTasksCollection(candidateTasks);
+    await writeFutureTasksFile(normalizedTasks);
+
+    return normalizedTasks;
+  } catch (error) {
+    if (error && error.code !== 'ENOENT') {
+      console.warn(
+        'StickyDesk: failed to read future tasks JSON, recreating defaults.',
+      );
+    }
+
+    const defaultTasks = getDefaultFutureTasks();
+    await writeFutureTasksFile(defaultTasks);
+
+    return defaultTasks;
+  }
+}
+
 function createNoteRecord(input) {
   const timestamp = formatTimestamp(new Date());
 
@@ -366,6 +491,20 @@ function createNoteRecord(input) {
     createdAt: timestamp,
     updatedAt: timestamp,
     pinned: Boolean(input.pinned),
+  };
+}
+
+function createFutureTaskRecord(input) {
+  const timestamp = formatTimestamp(new Date());
+  const parsedDueAt = isValidTimestamp(input?.dueAt)
+    ? formatTimestamp(new Date(input.dueAt))
+    : formatTimestamp(new Date(Date.now() + 60 * 60 * 1000));
+
+  return {
+    id: randomUUID(),
+    title: normalizeFutureTaskTitle(input?.title),
+    dueAt: parsedDueAt,
+    createdAt: timestamp,
   };
 }
 
@@ -521,13 +660,32 @@ app.whenReady().then(() => {
 
     return appliedValue;
   });
+  ipcMain.handle('window:is-cursor-inside', (event) => {
+    const targetWindow = getSenderWindow(event);
+
+    if (!targetWindow) {
+      return false;
+    }
+
+    const cursorPoint = screen.getCursorScreenPoint();
+    const { x, y, width, height } = targetWindow.getBounds();
+
+    return (
+      cursorPoint.x >= x &&
+      cursorPoint.x < x + width &&
+      cursorPoint.y >= y &&
+      cursorPoint.y < y + height
+    );
+  });
   ipcMain.handle('settings:get', () => {
     const settings = readSettingsFileSync();
 
     return {
       themeId: settings.themeId,
       uiScale: settings.uiScale,
+      shellOpacity: settings.shellOpacity,
       alwaysOnTop: settings.alwaysOnTop,
+      autoFadeWhenInactive: settings.autoFadeWhenInactive,
       window: settings.window,
       noteSort: settings.noteSort,
     };
@@ -544,7 +702,9 @@ app.whenReady().then(() => {
     return {
       themeId: nextSettings.themeId,
       uiScale: nextSettings.uiScale,
+      shellOpacity: nextSettings.shellOpacity,
       alwaysOnTop: nextSettings.alwaysOnTop,
+      autoFadeWhenInactive: nextSettings.autoFadeWhenInactive,
       window: nextSettings.window,
       noteSort: nextSettings.noteSort,
     };
@@ -561,7 +721,47 @@ app.whenReady().then(() => {
     return {
       themeId: nextSettings.themeId,
       uiScale: nextSettings.uiScale,
+      shellOpacity: nextSettings.shellOpacity,
       alwaysOnTop: nextSettings.alwaysOnTop,
+      autoFadeWhenInactive: nextSettings.autoFadeWhenInactive,
+      window: nextSettings.window,
+      noteSort: nextSettings.noteSort,
+    };
+  });
+  ipcMain.handle('settings:set-shell-opacity', (_, value) => {
+    const currentSettings = readSettingsFileSync();
+    const nextSettings = {
+      ...currentSettings,
+      shellOpacity: clampShellOpacity(value),
+    };
+
+    writeSettingsFileSync(nextSettings);
+
+    return {
+      themeId: nextSettings.themeId,
+      uiScale: nextSettings.uiScale,
+      shellOpacity: nextSettings.shellOpacity,
+      alwaysOnTop: nextSettings.alwaysOnTop,
+      autoFadeWhenInactive: nextSettings.autoFadeWhenInactive,
+      window: nextSettings.window,
+      noteSort: nextSettings.noteSort,
+    };
+  });
+  ipcMain.handle('settings:set-auto-fade-when-inactive', (_, value) => {
+    const currentSettings = readSettingsFileSync();
+    const nextSettings = {
+      ...currentSettings,
+      autoFadeWhenInactive: Boolean(value),
+    };
+
+    writeSettingsFileSync(nextSettings);
+
+    return {
+      themeId: nextSettings.themeId,
+      uiScale: nextSettings.uiScale,
+      shellOpacity: nextSettings.shellOpacity,
+      alwaysOnTop: nextSettings.alwaysOnTop,
+      autoFadeWhenInactive: nextSettings.autoFadeWhenInactive,
       window: nextSettings.window,
       noteSort: nextSettings.noteSort,
     };
@@ -581,10 +781,35 @@ app.whenReady().then(() => {
     return {
       themeId: nextSettings.themeId,
       uiScale: nextSettings.uiScale,
+      shellOpacity: nextSettings.shellOpacity,
       alwaysOnTop: nextSettings.alwaysOnTop,
+      autoFadeWhenInactive: nextSettings.autoFadeWhenInactive,
       window: nextSettings.window,
       noteSort: nextSettings.noteSort,
     };
+  });
+  ipcMain.handle('future-tasks:list', async () => readFutureTasksFile());
+  ipcMain.handle('future-tasks:create', async (_, input) => {
+    const currentTasks = await readFutureTasksFile();
+    const nextTask = createFutureTaskRecord(input ?? {});
+    const nextTasks = [...currentTasks, nextTask];
+
+    await writeFutureTasksFile(nextTasks);
+
+    return nextTask;
+  });
+  ipcMain.handle('future-tasks:delete', async (_, id) => {
+    const currentTasks = await readFutureTasksFile();
+    const nextTasks = currentTasks.filter((task) => task.id !== id);
+    const wasDeleted = nextTasks.length !== currentTasks.length;
+
+    if (!wasDeleted) {
+      return false;
+    }
+
+    await writeFutureTasksFile(nextTasks);
+
+    return true;
   });
   ipcMain.handle('notes:list', async () => readNotesFile());
   ipcMain.handle('notes:create', async (_, input) => {

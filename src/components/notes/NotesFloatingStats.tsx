@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 import type { FocusTimerSession } from '../../hooks/useFocusTimer';
 
 type NotesFloatingStatsProps = {
-  totalNotes: number;
-  pinnedNotes: number;
+  totalItems: number;
   completedFocusCount: number;
   focusSession: FocusTimerSession | null;
   onStartFocusTimer: (input: {
@@ -41,8 +40,7 @@ function formatFocusDuration(totalSeconds: number): string {
 }
 
 function NotesFloatingStats({
-  totalNotes,
-  pinnedNotes,
+  totalItems,
   completedFocusCount,
   focusSession,
   onStartFocusTimer,
@@ -167,11 +165,7 @@ function NotesFloatingStats({
         ) : (
           <button
             type="button"
-            className={
-              focusSession.phase === 'alerting'
-                ? 'focus-timer-overlay focus-timer-overlay-button focus-timer-overlay-alerting'
-                : 'focus-timer-overlay focus-timer-overlay-button'
-            }
+            className="focus-timer-overlay focus-timer-overlay-button"
             aria-live="assertive"
             onClick={handleDismissReminder}
           >
@@ -293,12 +287,8 @@ function NotesFloatingStats({
         </div>
         <aside className="floating-stats" aria-label="Notes quick summary">
           <div className="floating-stat">
-            <span className="floating-stat-label">Notes</span>
-            <strong className="floating-stat-value">{totalNotes}</strong>
-          </div>
-          <div className="floating-stat">
-            <span className="floating-stat-label">Pinned</span>
-            <strong className="floating-stat-value">{pinnedNotes}</strong>
+            <span className="floating-stat-label">Total</span>
+            <strong className="floating-stat-value">{totalItems}</strong>
           </div>
           <div className="floating-stat">
             <span className="floating-stat-label">Focus</span>

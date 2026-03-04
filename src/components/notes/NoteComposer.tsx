@@ -72,12 +72,12 @@ function NoteComposer({ onCreate, onCancel }: NoteComposerProps) {
         </label>
         <label className="note-composer-field">
           <span>Content</span>
-          <textarea
+          <input
+            type="text"
             value={content}
             onChange={(event) => setContent(event.target.value)}
             placeholder="Write the main idea here"
             disabled={isSubmitting}
-            rows={4}
           />
         </label>
         <label className="note-composer-field">

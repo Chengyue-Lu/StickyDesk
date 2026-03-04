@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import FutureTasksPanel from '../components/notes/FutureTasksPanel';
+import FutureTaskComposer from '../components/notes/FutureTaskComposer';
 import NoteComposer from '../components/notes/NoteComposer';
 import NotesFloatingStats from '../components/notes/NotesFloatingStats';
 import NotesHero from '../components/notes/NotesHero';
@@ -9,11 +11,15 @@ import WindowOverlayControls from '../components/notes/WindowOverlayControls';
 import { useActiveTime } from '../hooks/useActiveTime';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { useFocusTimer } from '../hooks/useFocusTimer';
+import { useFutureTasks } from '../hooks/useFutureTasks';
 import { useNotes } from '../hooks/useNotes';
 import type { CreateNoteInput } from '../types/note';
 
 function NotesBoard() {
-  const [isComposerOpen, setIsComposerOpen] = useState(false);
+  const [isPointerInsideShell, setIsPointerInsideShell] = useState(true);
+  const [openComposer, setOpenComposer] = useState<'note' | 'future' | null>(
+    null,
+  );
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
   const [isVisualShellReady, setIsVisualShellReady] = useState(false);
   const {
@@ -26,9 +32,16 @@ function NotesBoard() {
     settings,
     updateTheme,
     updateUiScale,
+    updateShellOpacity,
     updateAlwaysOnTop,
+    updateAutoFadeWhenInactive,
     updateNoteSort,
   } = useAppSettings();
+  const {
+    futureTasks,
+    addFutureTask,
+    removeFutureTask,
+  } = useFutureTasks();
   const {
     todayActiveSeconds,
     totalActiveSeconds,
@@ -43,7 +56,6 @@ function NotesBoard() {
     visibleNotes,
     visiblePinnedNotes,
     visibleRegularNotes,
-    pinnedCount,
     searchQuery,
     setSearchQuery,
     isFiltering,
@@ -74,10 +86,62 @@ function NotesBoard() {
     };
   }, []);
 
+  useEffect(() => {
+    let isDisposed = false;
+    let pollTimerId = 0;
+
+    if (!settings.autoFadeWhenInactive) {
+      setIsPointerInsideShell(true);
+      return () => {};
+    }
+
+    const syncPointerState = async () => {
+      if (typeof window.stickyDesk?.isCursorInsideWindow !== 'function') {
+        if (!isDisposed) {
+          setIsPointerInsideShell(true);
+        }
+        return;
+      }
+
+      try {
+        const nextIsInside = await window.stickyDesk.isCursorInsideWindow();
+
+        if (!isDisposed) {
+          setIsPointerInsideShell(nextIsInside);
+        }
+      } catch {
+        if (!isDisposed) {
+          setIsPointerInsideShell(true);
+        }
+      }
+    };
+
+    void syncPointerState();
+    pollTimerId = window.setInterval(() => {
+      void syncPointerState();
+    }, 160);
+
+    return () => {
+      isDisposed = true;
+
+      if (pollTimerId) {
+        window.clearInterval(pollTimerId);
+      }
+    };
+  }, [settings.autoFadeWhenInactive]);
+
   async function handleCreateNote(input: CreateNoteInput) {
     await addNote(input);
     setSearchQuery('');
-    setIsComposerOpen(false);
+    setOpenComposer(null);
+  }
+
+  async function handleCreateFutureTask(input: {
+    title: string;
+    dueAt: string;
+  }) {
+    await addFutureTask(input);
+    setOpenComposer(null);
   }
 
   async function handleDeleteNote(id: string) {
@@ -94,8 +158,16 @@ function NotesBoard() {
     setExpandedNoteId((currentValue) => (currentValue === id ? null : id));
   }
 
+  const isShowingNotesEmptyState = isFiltering
+    ? visibleNotes.length === 0
+    : notes.length === 0;
+
   const shellClassName = [
     'app-shell',
+    settings.autoFadeWhenInactive ? 'app-shell-auto-fade' : '',
+    settings.autoFadeWhenInactive && !isPointerInsideShell
+      ? 'app-shell-auto-fade-inactive'
+      : '',
     isVisualShellReady ? '' : 'app-shell-booting',
     focusSession?.phase === 'alerting' ? 'app-shell-alerting' : '',
   ]
@@ -109,9 +181,38 @@ function NotesBoard() {
         settings={settings}
         onThemeChange={updateTheme}
         onUiScaleChange={updateUiScale}
+        onShellOpacityChange={updateShellOpacity}
         onAlwaysOnTopChange={updateAlwaysOnTop}
+        onAutoFadeWhenInactiveChange={updateAutoFadeWhenInactive}
         onNoteSortChange={updateNoteSort}
       />
+      {openComposer ? (
+        <div
+          className="composer-backdrop"
+          onClick={() => {
+            setOpenComposer(null);
+          }}
+        >
+          <div
+            className="composer-dialog"
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            {openComposer === 'note' ? (
+              <NoteComposer
+                onCreate={handleCreateNote}
+                onCancel={() => setOpenComposer(null)}
+              />
+            ) : (
+              <FutureTaskComposer
+                onCreate={handleCreateFutureTask}
+                onCancel={() => setOpenComposer(null)}
+              />
+            )}
+          </div>
+        </div>
+      ) : null}
       <div className="app-scroll-region">
         <section className="workspace">
           <NotesHero
@@ -128,61 +229,112 @@ function NotesBoard() {
             onSearchChange={setSearchQuery}
             resultCount={visibleNotes.length}
             isFiltering={isFiltering}
-            isComposerOpen={isComposerOpen}
-            onToggleComposer={() => setIsComposerOpen((currentValue) => !currentValue)}
           />
-          {isComposerOpen ? (
-            <NoteComposer
-              onCreate={handleCreateNote}
-              onCancel={() => setIsComposerOpen(false)}
+          <div className="board-split-layout">
+            <section className="notes-pane" aria-label="Notes panel">
+              <div className="notes-pane-head">
+                <div className="notes-pane-head-copy">
+                  <h2 id="notes-pane-title">Notes</h2>
+                  <p>Fast capture and quick editing</p>
+                </div>
+                <div className="notes-pane-head-actions">
+                  <span className="section-count">{notes.length}</span>
+                  <button
+                    type="button"
+                    className={
+                      openComposer === 'note'
+                        ? 'future-task-create-button future-task-create-button-active'
+                        : 'future-task-create-button'
+                    }
+                    aria-label={
+                      openComposer === 'note'
+                        ? 'Close note composer'
+                        : 'Create a new note'
+                    }
+                    onClick={() => {
+                      setOpenComposer((currentValue) =>
+                        currentValue === 'note' ? null : 'note',
+                      );
+                    }}
+                  >
+                    <span className="future-task-create-glyph" aria-hidden="true">
+                      {openComposer === 'note' ? 'x' : '+'}
+                    </span>
+                  </button>
+                </div>
+              </div>
+              <div
+                className={
+                  isShowingNotesEmptyState
+                    ? 'notes-pane-scroll notes-pane-scroll-empty'
+                    : 'notes-pane-scroll'
+                }
+              >
+                {/* Search mode collapses the board into one result list; otherwise keep pinned and regular notes separate. */}
+                {isFiltering ? (
+                  visibleNotes.length > 0 ? (
+                    <NotesSection
+                      title="Search Results"
+                      sectionId="search-results-title"
+                      notes={visibleNotes}
+                      expandedNoteId={expandedNoteId}
+                      onToggleExpand={handleToggleExpand}
+                      onDelete={handleDeleteNote}
+                      onUpdate={editNote}
+                    />
+                  ) : (
+                    <NotesEmptyState
+                      title="No matching notes"
+                      description="Try a different keyword. Search currently checks title, content, and tags."
+                    />
+                  )
+                ) : (
+                  notes.length > 0 ? (
+                    <>
+                      <NotesSection
+                        title="Pinned Notes"
+                        sectionId="pinned-notes-title"
+                        notes={visiblePinnedNotes}
+                        pinned
+                        expandedNoteId={expandedNoteId}
+                        onToggleExpand={handleToggleExpand}
+                        onDelete={handleDeleteNote}
+                        onUpdate={editNote}
+                      />
+                      <NotesSection
+                        title="All Notes"
+                        sectionId="all-notes-title"
+                        notes={visibleRegularNotes}
+                        expandedNoteId={expandedNoteId}
+                        onToggleExpand={handleToggleExpand}
+                        onDelete={handleDeleteNote}
+                        onUpdate={editNote}
+                      />
+                    </>
+                  ) : (
+                    <NotesEmptyState
+                      title="No notes yet"
+                      description="Create one and it will appear here."
+                    />
+                  )
+                )}
+              </div>
+            </section>
+            <FutureTasksPanel
+              tasks={futureTasks}
+              isComposerOpen={openComposer === 'future'}
+              onToggleComposer={() => {
+                setOpenComposer((currentValue) =>
+                  currentValue === 'future' ? null : 'future',
+                );
+              }}
+              onDelete={removeFutureTask}
             />
-          ) : null}
-          {/* Search mode collapses the board into one result list; otherwise keep pinned and regular notes separate. */}
-          {isFiltering ? (
-            visibleNotes.length > 0 ? (
-              <NotesSection
-                title="Search Results"
-                sectionId="search-results-title"
-                notes={visibleNotes}
-                expandedNoteId={expandedNoteId}
-                onToggleExpand={handleToggleExpand}
-                onDelete={handleDeleteNote}
-                onUpdate={editNote}
-              />
-            ) : (
-              <NotesEmptyState
-                title="No matching notes"
-                description="Try a different keyword. Search currently checks title, content, and tags."
-              />
-            )
-          ) : (
-            <>
-              <NotesSection
-                title="Pinned Notes"
-                sectionId="pinned-notes-title"
-                notes={visiblePinnedNotes}
-                pinned
-                expandedNoteId={expandedNoteId}
-                onToggleExpand={handleToggleExpand}
-                onDelete={handleDeleteNote}
-                onUpdate={editNote}
-              />
-              <NotesSection
-                title="All Notes"
-                sectionId="all-notes-title"
-                notes={visibleRegularNotes}
-                expandedNoteId={expandedNoteId}
-                onToggleExpand={handleToggleExpand}
-                onDelete={handleDeleteNote}
-                onUpdate={editNote}
-              />
-            </>
-          )}
+          </div>
         </section>
       </div>
       <NotesFloatingStats
-        totalNotes={notes.length}
-        pinnedNotes={pinnedCount}
+        totalItems={notes.length + futureTasks.length}
         completedFocusCount={completedFocusCount}
         focusSession={focusSession}
         onStartFocusTimer={startTimer}

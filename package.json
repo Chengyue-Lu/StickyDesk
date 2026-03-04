@@ -1,9 +1,9 @@
 {
   "name": "sticky-notes",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "lcy",
   "private": true,
-  "description": "Minimal Electron + React shell for StickyDesk.",
+  "description": "StickyDesk desktop notes and countdown panel.",
   "main": "./main.cjs",
   "scripts": {
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
