@@ -1,10 +1,11 @@
 /* Global base tokens and page defaults. Adjust root font-size here if the whole UI should scale together. */
 :root {
+  --ui-scale: 1;
   color-scheme: light;
   font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   color: #0f172a;
   background: transparent;
-  font-size: 12px;
+  font-size: calc(12px * var(--ui-scale));
   --theme-shell-glow-a-rgb: 186, 230, 253;
   --theme-shell-glow-b-rgb: 255, 255, 255;
   --theme-shell-glow-c-rgb: 191, 219, 254;
@@ -202,7 +203,8 @@ body {
 }
 
 .workspace {
-  width: min(360px, 100%);
+  width: 100%;
+  max-width: 100%;
   margin: 0 auto;
   display: grid;
   gap: 8px;
@@ -269,7 +271,7 @@ body {
 }
 
 .activity-eyebrow {
-  font-size: 10px;
+  font-size: 0.833rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -567,6 +569,36 @@ body {
 
 .settings-size-apply:hover {
   background: rgba(var(--theme-accent-soft-rgb), 1);
+}
+
+.settings-scale-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.settings-scale-slider {
+  width: 100%;
+  margin: 0;
+  accent-color: rgb(var(--theme-accent-rgb));
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.settings-scale-value {
+  min-width: 42px;
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--theme-panel-border-rgb), 0.46);
+  background: rgba(var(--theme-soft-surface-rgb), 0.82);
+  color: #334155;
+  font-size: 0.62rem;
+  font-weight: 700;
 }
 
 .settings-theme-options {
@@ -1478,7 +1510,7 @@ body {
   top: 52px;
   left: 50%;
   z-index: 30;
-  width: min(338px, calc(100% - 24px));
+  width: min(720px, calc(100% - 24px));
   transform: translateX(-50%);
   -webkit-app-region: no-drag;
   pointer-events: none;

@@ -10,6 +10,9 @@ const MIN_WINDOW_WIDTH = 360;
 const MIN_WINDOW_HEIGHT = 720;
 const MAX_WINDOW_WIDTH = MIN_WINDOW_WIDTH * 3;
 const MAX_WINDOW_HEIGHT = 2160;
+const MIN_UI_SCALE = 1;
+const MAX_UI_SCALE = 2;
+const UI_SCALE_STEP = 0.1;
 
 const THEME_OPTIONS: Array<{
   id: ThemeId;
@@ -72,6 +75,7 @@ const SORT_FIELD_OPTIONS: Array<{
 type WindowOverlayControlsProps = {
   settings: AppSettings;
   onThemeChange: (themeId: ThemeId) => Promise<void>;
+  onUiScaleChange: (value: number) => Promise<void>;
   onAlwaysOnTopChange: (value: boolean) => Promise<boolean>;
   onNoteSortChange: (
     field: NoteSortField,
@@ -93,9 +97,20 @@ function normalizeDimensionInput(
   return Math.min(maximum, Math.max(minimum, parsedValue));
 }
 
+function normalizeUiScaleInput(value: number): number {
+  if (!Number.isFinite(value)) {
+    return MIN_UI_SCALE;
+  }
+
+  const clampedValue = Math.min(MAX_UI_SCALE, Math.max(MIN_UI_SCALE, value));
+
+  return Math.round(clampedValue * 10) / 10;
+}
+
 function WindowOverlayControls({
   settings,
   onThemeChange,
+  onUiScaleChange,
   onAlwaysOnTopChange,
   onNoteSortChange,
 }: WindowOverlayControlsProps) {
@@ -146,7 +161,7 @@ function WindowOverlayControls({
     setWindowHeightInput(String(requestedHeight));
   };
 
-  const handleToggleAlwaysOnTop = async () => {
+  const handleToggleAlwaysOnTop = () => {
     void onAlwaysOnTopChange(!settings.alwaysOnTop);
   };
 
@@ -215,7 +230,7 @@ function WindowOverlayControls({
         <div className="settings-group">
           <p className="settings-group-label">Window Size</p>
           <p className="settings-group-hint">
-            Width {MIN_WINDOW_WIDTH}-{MAX_WINDOW_WIDTH}px · Height{' '}
+            Width {MIN_WINDOW_WIDTH}-{MAX_WINDOW_WIDTH}px / Height{' '}
             {MIN_WINDOW_HEIGHT}-{MAX_WINDOW_HEIGHT}px
           </p>
           <form
@@ -259,6 +274,28 @@ function WindowOverlayControls({
               Apply Size
             </button>
           </form>
+        </div>
+        <div className="settings-group">
+          <p className="settings-group-label">UI Scale</p>
+          <div className="settings-scale-row">
+            <input
+              type="range"
+              min={MIN_UI_SCALE}
+              max={MAX_UI_SCALE}
+              step={UI_SCALE_STEP}
+              value={settings.uiScale}
+              className="settings-scale-slider"
+              aria-label="Global UI scale"
+              onChange={(event) => {
+                void onUiScaleChange(
+                  normalizeUiScaleInput(Number(event.target.value)),
+                );
+              }}
+            />
+            <span className="settings-scale-value">
+              {settings.uiScale.toFixed(1)}x
+            </span>
+          </div>
         </div>
         <div className="settings-group">
           <p className="settings-group-label">Window Layer</p>
@@ -343,7 +380,7 @@ function WindowOverlayControls({
               onClick={handleToggleSortDirection}
             >
               <span className="settings-sort-direction-glyph" aria-hidden="true">
-                {settings.noteSort.direction === 'desc' ? '↓' : '↑'}
+                {settings.noteSort.direction === 'desc' ? 'v' : '^'}
               </span>
             </button>
           </div>

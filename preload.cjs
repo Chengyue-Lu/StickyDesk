@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('stickyDesk', {
   setAlwaysOnTop: (value) => ipcRenderer.invoke('window:set-always-on-top', value),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setTheme: (themeId) => ipcRenderer.invoke('settings:set-theme', themeId),
+  setUiScale: (value) => ipcRenderer.invoke('settings:set-ui-scale', value),
   setNoteSort: (field, direction) =>
     ipcRenderer.invoke('settings:set-note-sort', field, direction),
   listNotes: () => ipcRenderer.invoke('notes:list'),

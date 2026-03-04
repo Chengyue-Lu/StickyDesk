@@ -8,6 +8,7 @@ import type {
 
 const DEFAULT_SETTINGS: AppSettings = {
   themeId: 'white',
+  uiScale: 1,
   alwaysOnTop: false,
   window: {
     width: 360,
@@ -27,9 +28,28 @@ function applyTheme(themeId: ThemeId) {
   document.documentElement.dataset.theme = themeId;
 }
 
+function applyUiScale(value: number) {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  document.documentElement.style.setProperty('--ui-scale', String(value));
+}
+
+function normalizeUiScale(value: number): number {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_SETTINGS.uiScale;
+  }
+
+  const clampedValue = Math.min(2, Math.max(1, value));
+
+  return Math.round(clampedValue * 10) / 10;
+}
+
 type UseAppSettingsResult = {
   settings: AppSettings;
   updateTheme: (themeId: ThemeId) => Promise<void>;
+  updateUiScale: (value: number) => Promise<void>;
   updateAlwaysOnTop: (value: boolean) => Promise<boolean>;
   updateNoteSort: (
     field: NoteSortField,
@@ -42,6 +62,7 @@ export function useAppSettings(): UseAppSettingsResult {
 
   useEffect(() => {
     applyTheme(DEFAULT_SETTINGS.themeId);
+    applyUiScale(DEFAULT_SETTINGS.uiScale);
 
     const loadSettings = async () => {
       if (typeof window === 'undefined') {
@@ -50,6 +71,7 @@ export function useAppSettings(): UseAppSettingsResult {
 
       if (typeof window.stickyDesk?.getSettings !== 'function') {
         applyTheme(DEFAULT_SETTINGS.themeId);
+        applyUiScale(DEFAULT_SETTINGS.uiScale);
         return;
       }
 
@@ -58,8 +80,10 @@ export function useAppSettings(): UseAppSettingsResult {
 
         setSettings(nextSettings);
         applyTheme(nextSettings.themeId);
+        applyUiScale(nextSettings.uiScale);
       } catch {
         applyTheme(DEFAULT_SETTINGS.themeId);
+        applyUiScale(DEFAULT_SETTINGS.uiScale);
       }
     };
 
@@ -93,6 +117,38 @@ export function useAppSettings(): UseAppSettingsResult {
       themeId,
     }));
     applyTheme(themeId);
+  };
+
+  const updateUiScale = async (value: number) => {
+    const nextValue = normalizeUiScale(value);
+
+    setSettings((currentSettings) => ({
+      ...currentSettings,
+      uiScale: nextValue,
+    }));
+    applyUiScale(nextValue);
+
+    if (typeof window.stickyDesk?.setUiScale !== 'function') {
+      return;
+    }
+
+    try {
+      const nextSettings = await window.stickyDesk.setUiScale(nextValue);
+
+      if (nextSettings) {
+        setSettings(nextSettings);
+        applyUiScale(nextSettings.uiScale);
+        return;
+      }
+    } catch {
+      // Fall through to local state.
+    }
+
+    setSettings((currentSettings) => ({
+      ...currentSettings,
+      uiScale: nextValue,
+    }));
+    applyUiScale(nextValue);
   };
 
   const updateAlwaysOnTop = async (value: boolean): Promise<boolean> => {
@@ -154,6 +210,7 @@ export function useAppSettings(): UseAppSettingsResult {
   return {
     settings,
     updateTheme,
+    updateUiScale,
     updateAlwaysOnTop,
     updateNoteSort,
   };

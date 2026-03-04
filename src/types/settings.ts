@@ -5,6 +5,7 @@ export type NoteSortDirection = 'desc' | 'asc';
 
 export type AppSettings = {
   themeId: ThemeId;
+  uiScale: number;
   alwaysOnTop: boolean;
   window: {
     width: number;

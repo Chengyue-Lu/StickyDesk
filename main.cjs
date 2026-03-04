@@ -9,6 +9,8 @@ const MIN_WINDOW_WIDTH = 360;
 const MIN_WINDOW_HEIGHT = 720;
 const MAX_WINDOW_WIDTH = MIN_WINDOW_WIDTH * 3;
 const MAX_WINDOW_HEIGHT = 2160;
+const MIN_UI_SCALE = 1;
+const MAX_UI_SCALE = 2;
 const DEFAULT_THEME_ID = 'white';
 const VALID_THEME_IDS = new Set(['white', 'yellow', 'blue', 'green', 'purple']);
 const DEFAULT_NOTE_SORT_FIELD = 'createdAt';
@@ -117,6 +119,18 @@ function normalizeThemeId(value) {
   return VALID_THEME_IDS.has(value) ? value : DEFAULT_THEME_ID;
 }
 
+function clampUiScale(value) {
+  const numericValue = Number(value);
+
+  if (!Number.isFinite(numericValue)) {
+    return MIN_UI_SCALE;
+  }
+
+  const clampedValue = Math.min(MAX_UI_SCALE, Math.max(MIN_UI_SCALE, numericValue));
+
+  return Math.round(clampedValue * 10) / 10;
+}
+
 function normalizeNoteSortField(value) {
   return VALID_NOTE_SORT_FIELDS.has(value) ? value : DEFAULT_NOTE_SORT_FIELD;
 }
@@ -131,6 +145,7 @@ function getDefaultSettings() {
   return {
     version: 1,
     themeId: DEFAULT_THEME_ID,
+    uiScale: MIN_UI_SCALE,
     alwaysOnTop: false,
     window: {
       width: MIN_WINDOW_WIDTH,
@@ -150,6 +165,7 @@ function normalizeSettingsRecord(settings) {
   return {
     version: 1,
     themeId: normalizeThemeId(settings?.themeId),
+    uiScale: clampUiScale(settings?.uiScale),
     alwaysOnTop: Boolean(settings?.alwaysOnTop),
     window: {
       width:
@@ -510,6 +526,7 @@ app.whenReady().then(() => {
 
     return {
       themeId: settings.themeId,
+      uiScale: settings.uiScale,
       alwaysOnTop: settings.alwaysOnTop,
       window: settings.window,
       noteSort: settings.noteSort,
@@ -526,6 +543,24 @@ app.whenReady().then(() => {
 
     return {
       themeId: nextSettings.themeId,
+      uiScale: nextSettings.uiScale,
+      alwaysOnTop: nextSettings.alwaysOnTop,
+      window: nextSettings.window,
+      noteSort: nextSettings.noteSort,
+    };
+  });
+  ipcMain.handle('settings:set-ui-scale', (_, value) => {
+    const currentSettings = readSettingsFileSync();
+    const nextSettings = {
+      ...currentSettings,
+      uiScale: clampUiScale(value),
+    };
+
+    writeSettingsFileSync(nextSettings);
+
+    return {
+      themeId: nextSettings.themeId,
+      uiScale: nextSettings.uiScale,
       alwaysOnTop: nextSettings.alwaysOnTop,
       window: nextSettings.window,
       noteSort: nextSettings.noteSort,
@@ -545,6 +580,7 @@ app.whenReady().then(() => {
 
     return {
       themeId: nextSettings.themeId,
+      uiScale: nextSettings.uiScale,
       alwaysOnTop: nextSettings.alwaysOnTop,
       window: nextSettings.window,
       noteSort: nextSettings.noteSort,

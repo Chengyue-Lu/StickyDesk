@@ -23,6 +23,7 @@ type StickyDeskBridge = {
   setAlwaysOnTop: (value: boolean) => Promise<boolean>;
   getSettings: () => Promise<AppSettings>;
   setTheme: (themeId: ThemeId) => Promise<AppSettings | null>;
+  setUiScale: (value: number) => Promise<AppSettings | null>;
   setNoteSort: (
     field: NoteSortField,
     direction: NoteSortDirection,

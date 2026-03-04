@@ -25,6 +25,7 @@ function NotesBoard() {
   const {
     settings,
     updateTheme,
+    updateUiScale,
     updateAlwaysOnTop,
     updateNoteSort,
   } = useAppSettings();
@@ -107,6 +108,7 @@ function NotesBoard() {
       <WindowOverlayControls
         settings={settings}
         onThemeChange={updateTheme}
+        onUiScaleChange={updateUiScale}
         onAlwaysOnTopChange={updateAlwaysOnTop}
         onNoteSortChange={updateNoteSort}
       />
