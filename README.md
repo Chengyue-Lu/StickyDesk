@@ -5,7 +5,7 @@
 StickyDesk is a compact desktop notes side panel built with Electron, React, and Vite.
 It focuses on fast capture, quick scanning, and a lightweight desktop companion workflow inside a narrow frameless window.
 
-> Status: `v0.2.0` prototype release. The core notes workflow, local persistence, basic personalization, and release packaging are in place.
+> Status: `v0.2.0` prototype release. Core note editing, local JSON persistence, short focus timing, basic personalization, and Windows packaging are in place.
 
 ## Current Features
 
@@ -29,6 +29,14 @@ It focuses on fast capture, quick scanning, and a lightweight desktop companion 
 - Idle timer resets to `0s` when the app first enters the idle state
 - Daily and total reset actions
 
+### Focus Timer
+
+- Short focus timer with task content plus hour / minute input
+- Fixed in-window countdown card that stays above the scrolling content
+- Cancel flow with a two-step confirmation while a session is running
+- Full-window alert flashing when a session finishes
+- In-memory focus completion count shown in the bottom stats bar
+
 ### Window Shell
 
 - Frameless translucent desktop panel
@@ -38,6 +46,7 @@ It focuses on fast capture, quick scanning, and a lightweight desktop companion 
 - `Always on Top` toggle with persistence
 - Startup shell that shows earlier while the renderer finishes loading
 - Hidden native scrollbars for a cleaner compact layout
+- Expanded top drag region for easier window movement
 
 ### Themes
 
@@ -52,8 +61,9 @@ It focuses on fast capture, quick scanning, and a lightweight desktop companion 
 
 ## Current Limitations
 
-- There is no countdown / focus timer yet
+- The focus timer is still single-session only and does not persist across restarts
 - There is no tray integration yet
+- There is no import / export for notes or settings yet
 - Portable single-file builds still start slower than unpacked builds because they must extract to a temporary directory before launch
 - Electron remains the main source of package size; the runtime is much larger than the app code itself
 
@@ -70,9 +80,10 @@ It focuses on fast capture, quick scanning, and a lightweight desktop companion 
 - `main.cjs`: Electron main process, JSON storage, and IPC
 - `preload.cjs`: secure renderer bridge
 - `src/pages/NotesBoard.tsx`: main board composition
-- `src/components/notes/`: note cards, composer, toolbar, hero, and window controls
+- `src/components/notes/`: note cards, composer, toolbar, hero, floating stats, and window controls
 - `src/hooks/useActiveTime.ts`: active / idle tracking
 - `src/hooks/useAppSettings.ts`: renderer-side settings state
+- `src/hooks/useFocusTimer.ts`: short focus timer state and reminder flow
 - `src/hooks/useNotes.ts`: note loading, filtering, sorting, and mutations
 - `src/data/notes.ts`: renderer-side note I/O adapter
 - `data/notes.json`: runtime notes storage (auto-created)
@@ -117,16 +128,19 @@ Portable and unpacked builds are the current supported release formats. An NSIS 
 
 ## Roadmap
 
-### Next
+### v0.3.0
 
-- [x] Add short countdown / focus timers
-- [ ] Add tray integration and background controls
-- [ ] Add import / export for notes and settings
-- [ ] Evaluate `electron-vite` to unify the Electron build pipeline
+- [ ] Add adjustable global UI scale / font size
+- [ ] Add adjustable shell translucency / background opacity
+- [ ] Expand the current short focus timer into future countdown tasks for longer schedules
+- [ ] Support multiple upcoming timers instead of only one active short session
+- [ ] Evaluate `electron-vite` to simplify and unify the Electron build pipeline
 - [ ] Keep trimming cold-start overhead where it does not compromise the current visual shell
 
 ### Later
 
+- [ ] Add tray integration and background controls
+- [ ] Add import / export for notes and settings
 - [ ] Revisit richer note metadata and filtering
 - [ ] Consider Tauri as a future migration option if Electron no longer meets startup or package-size goals
 - [ ] Re-evaluate SQLite only if local JSON becomes a clear limitation
