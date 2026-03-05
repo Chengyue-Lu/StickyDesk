@@ -1,21 +1,21 @@
 # StickyDesk
 
-StickyDesk is a desktop sticky notes app built with Tauri, React, and TypeScript.
+StickyDesk 是一款基于 Tauri、React 和 TypeScript 构建的桌面便签与效率应用。
 
-This is the first stable Tauri release line. The current release target is `v1.0.0`.
+这是首个稳定的 Tauri 版本线。当前的发布目标版本是 `v1.0.0`。
 
-## Features
+## 功能特性 (Features)
 
-- Quick sticky note capture, edit, sort, and delete
-- Future task list with lightweight planning
-- Focus timer with completion reminders
-- Active time tracking with Windows system idle detection
-- Always-on-top support
-- Auto-fade when the window is inactive
-- Theme, opacity, UI scale, and note sort preferences
-- Local data persistence through the Tauri application data directory
+- 快速的便签记录、编辑、排序与删除
+- 包含轻量级规划的未来任务清单
+- 带有���成提醒的专注倒计时
+- 基于 Windows 系统空闲检测的活跃时间追踪
+- 支持窗口始终置顶
+- 窗口失去焦点时自动淡出
+- 主题、透明度、UI 缩放以及便签排序偏好设置
+- 通过 Tauri 应用程序数据目录进行本地数据持久化
 
-## Tech Stack
+## 技术栈 (Tech Stack)
 
 - Tauri 2
 - React 19
@@ -23,33 +23,32 @@ This is the first stable Tauri release line. The current release target is `v1.0
 - Vite
 - Rust
 
-## Data Storage
+## 数据存储 (Data Storage)
 
-The Tauri build stores app data in the operating system application data directory.
+Tauri 构建版本将应用数据存储在操作系统的应用程序数据目录中。
 
-On Windows, the current app identity remains bound to the existing Tauri identifier so upgrades can keep using the same stored data path.
+在 Windows 上，当前应用身份仍然绑定到现有的 Tauri 标识符，因此后续升级可以继续使用相同的存储数据路径。
 
-## Release
+## 版本发布 (Release)
 
-- Current target version: `1.0.0`
-- Package version, Tauri bundle version, and Rust crate version are aligned to `1.0.0`
+- 当前目标版本：`1.0.0`
+- Package 版本、Tauri bundle 版本以及 Rust crate 版本均对齐至 `1.0.0`
 
-## Why Tauri
+## 为什么选择 Tauri (Why Tauri)
 
-`v1.0.0` is the first stable release after the migration from Electron to Tauri.
+`v1.0.0` 是从 Electron 迁移到 Tauri 后的首个稳定版本。
 
-It keeps the original core experience while reducing runtime overhead, moving desktop logic into Rust, and preparing the project for follow-up desktop features such as tray support, auto-start, and click-through mode.
+它在保留原有核心体验的同时，降低了运行时的开销，将桌面端逻辑下沉至 Rust，并为后续的桌面级特性（如系统托盘支持、开机自启、点击穿透模式等）做好了准备。
 
-## Roadmap
+## 后续演进 (What's Next)
 
-Planned directions for `v1.0.1`:
+**StickyDesk 正在持续进化中。**
 
-- Tray integration: left click to restore, close button hides to tray, right-click menu to quit
-- Optional Windows auto-start switch
-- Click-through mode is under evaluation because Tauri supports window-level cursor ignoring, but keeping only a few controls clickable is a more complex interaction model
+后续我们即将推出包括 **窗口分离与自由组合**、**边缘自动收起**、**系统托盘与开机自启** 以及 **数据导出与轻量级导入** 等一系列增强功能，敬请期待！
 
-Longer-term idea:
+具体的迭代计划与产品思考，请参阅：
+[👉 预期规划](./预期规划.md)
 
-- Online active-time comparison is a future research item and is not planned for the current release line
+---
 
-See the Chinese usage guide file in the project root for user-facing instructions [☞使用说明](./使用说明.md).
+获取面向用户的操作指南，请查看项目根目录下的中文使用说明：[☞使用说明](./使用说明.md)。
