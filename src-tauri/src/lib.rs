@@ -110,11 +110,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             sticky_desk::should_show_window_on_boot,
+            sticky_desk::open_test_window,
             sticky_desk::get_idle_seconds,
             sticky_desk::minimize_window,
             sticky_desk::close_window,
-            sticky_desk::set_window_size,
             sticky_desk::set_always_on_top,
+            sticky_desk::set_window_always_on_top_local,
+            sticky_desk::set_main_window_layout_compact,
             sticky_desk::is_cursor_inside_window,
             sticky_desk::get_settings,
             sticky_desk::set_theme,

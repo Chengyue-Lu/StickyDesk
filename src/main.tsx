@@ -23,7 +23,11 @@ async function revealWindowAndDismissBootShell() {
   let shouldShowWindow = true;
 
   try {
-    shouldShowWindow = await invoke<boolean>('should_show_window_on_boot');
+    const currentWindow = getCurrentWindow();
+
+    if (currentWindow.label === 'main') {
+      shouldShowWindow = await invoke<boolean>('should_show_window_on_boot');
+    }
   } catch {
     // In non-Tauri contexts keep the page visible.
   }

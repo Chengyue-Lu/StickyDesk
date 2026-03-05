@@ -2,19 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import {
   closeWindow,
   minimizeWindow,
-  setWindowSize,
 } from '../../lib/desktopApi';
 import type {
   AppSettings,
-  NoteSortDirection,
-  NoteSortField,
   ThemeId,
 } from '../../types/settings';
 
-const MIN_WINDOW_WIDTH = 360;
-const MIN_WINDOW_HEIGHT = 720;
-const MAX_WINDOW_WIDTH = MIN_WINDOW_WIDTH * 3;
-const MAX_WINDOW_HEIGHT = 2160;
 const MIN_UI_SCALE = 1;
 const MAX_UI_SCALE = 2;
 const UI_SCALE_STEP = 0.1;
@@ -66,46 +59,21 @@ const THEME_OPTIONS: Array<{
   },
 ];
 
-const SORT_FIELD_OPTIONS: Array<{
-  value: NoteSortField;
-  label: string;
-}> = [
-  {
-    value: 'createdAt',
-    label: 'Creation time',
-  },
-  {
-    value: 'updatedAt',
-    label: 'Modification time',
-  },
-];
-
 type WindowOverlayControlsProps = {
+  mode?: 'main' | 'module';
   settings: AppSettings;
+  showDetachControls?: boolean;
+  isNotesDetached?: boolean;
+  isTasksDetached?: boolean;
+  onToggleNotesDetached?: () => void;
+  onToggleTasksDetached?: () => void;
+  onToggleBothDetached?: () => void;
   onThemeChange: (themeId: ThemeId) => Promise<void>;
   onUiScaleChange: (value: number) => Promise<void>;
   onShellOpacityChange: (value: number) => Promise<void>;
   onAlwaysOnTopChange: (value: boolean) => Promise<boolean>;
   onAutoFadeWhenInactiveChange: (value: boolean) => Promise<void>;
-  onNoteSortChange: (
-    field: NoteSortField,
-    direction: NoteSortDirection,
-  ) => Promise<void>;
 };
-
-function normalizeDimensionInput(
-  value: string,
-  minimum: number,
-  maximum: number,
-): number {
-  const parsedValue = Number.parseInt(value, 10);
-
-  if (!Number.isFinite(parsedValue)) {
-    return minimum;
-  }
-
-  return Math.min(maximum, Math.max(minimum, parsedValue));
-}
 
 function normalizeUiScaleInput(value: number): number {
   if (!Number.isFinite(value)) {
@@ -131,30 +99,26 @@ function normalizeShellOpacityInput(value: number): number {
 }
 
 function WindowOverlayControls({
+  mode = 'main',
   settings,
+  showDetachControls = false,
+  isNotesDetached = false,
+  isTasksDetached = false,
+  onToggleNotesDetached,
+  onToggleTasksDetached,
+  onToggleBothDetached,
   onThemeChange,
   onUiScaleChange,
   onShellOpacityChange,
   onAlwaysOnTopChange,
   onAutoFadeWhenInactiveChange,
-  onNoteSortChange,
 }: WindowOverlayControlsProps) {
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [windowWidthInput, setWindowWidthInput] = useState(
-    String(settings.window.width),
-  );
-  const [windowHeightInput, setWindowHeightInput] = useState(
-    String(settings.window.height),
-  );
+  const [isDetachMenuOpen, setIsDetachMenuOpen] = useState(false);
 
   useEffect(() => {
-    setWindowWidthInput(String(settings.window.width));
-    setWindowHeightInput(String(settings.window.height));
-  }, [settings.window.height, settings.window.width]);
-
-  useEffect(() => {
-    if (!isSettingsOpen) {
+    if (!isSettingsOpen && !isDetachMenuOpen) {
       return undefined;
     }
 
@@ -170,6 +134,7 @@ function WindowOverlayControls({
       }
 
       setIsSettingsOpen(false);
+      setIsDetachMenuOpen(false);
     };
 
     document.addEventListener('pointerdown', handlePointerDown);
@@ -177,34 +142,11 @@ function WindowOverlayControls({
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown);
     };
-  }, [isSettingsOpen]);
+  }, [isDetachMenuOpen, isSettingsOpen]);
 
   const handleToggleSettings = () => {
     setIsSettingsOpen((currentValue) => !currentValue);
-  };
-
-  const handleApplyWindowSize = async () => {
-    const requestedWidth = normalizeDimensionInput(
-      windowWidthInput,
-      MIN_WINDOW_WIDTH,
-      MAX_WINDOW_WIDTH,
-    );
-    const requestedHeight = normalizeDimensionInput(
-      windowHeightInput,
-      MIN_WINDOW_HEIGHT,
-      MAX_WINDOW_HEIGHT,
-    );
-    try {
-      const appliedBounds = await setWindowSize(requestedWidth, requestedHeight);
-      setWindowWidthInput(String(appliedBounds.width));
-      setWindowHeightInput(String(appliedBounds.height));
-      return;
-    } catch {
-      // Keep the local input values when the desktop command is unavailable.
-    }
-
-    setWindowWidthInput(String(requestedWidth));
-    setWindowHeightInput(String(requestedHeight));
+    setIsDetachMenuOpen(false);
   };
 
   const handleToggleAlwaysOnTop = () => {
@@ -213,13 +155,6 @@ function WindowOverlayControls({
 
   const handleToggleAutoFadeWhenInactive = () => {
     void onAutoFadeWhenInactiveChange(!settings.autoFadeWhenInactive);
-  };
-
-  const handleToggleSortDirection = () => {
-    const nextDirection: NoteSortDirection =
-      settings.noteSort.direction === 'desc' ? 'asc' : 'desc';
-
-    void onNoteSortChange(settings.noteSort.field, nextDirection);
   };
 
   const handleMinimize = () => {
@@ -247,6 +182,77 @@ function WindowOverlayControls({
             &#9881;
           </span>
         </button>
+        {showDetachControls ? (
+          <div className="window-detach-shell">
+            <button
+              type="button"
+              aria-label={
+                isNotesDetached ? 'Attach notes module' : 'Detach notes module'
+              }
+              className={
+                isNotesDetached
+                  ? 'window-control-button window-control-button-active'
+                  : 'window-control-button'
+              }
+              onClick={() => {
+                setIsSettingsOpen(false);
+                setIsDetachMenuOpen(false);
+                onToggleNotesDetached?.();
+              }}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                setIsSettingsOpen(false);
+                setIsDetachMenuOpen((currentValue) => !currentValue);
+              }}
+            >
+              <span className="window-control-glyph" aria-hidden="true">
+                T
+              </span>
+            </button>
+            <section
+              className={
+                isDetachMenuOpen
+                  ? 'window-detach-menu window-detach-menu-open'
+                  : 'window-detach-menu'
+              }
+              aria-hidden={!isDetachMenuOpen}
+              aria-label="Detach module menu"
+            >
+              <button
+                type="button"
+                className="window-detach-menu-item"
+                onClick={() => {
+                  setIsDetachMenuOpen(false);
+                  onToggleNotesDetached?.();
+                }}
+              >
+                {isNotesDetached ? 'Attach notes' : 'Detach notes'}
+              </button>
+              <button
+                type="button"
+                className="window-detach-menu-item"
+                onClick={() => {
+                  setIsDetachMenuOpen(false);
+                  onToggleTasksDetached?.();
+                }}
+              >
+                {isTasksDetached ? 'Attach tasks' : 'Detach tasks'}
+              </button>
+              <button
+                type="button"
+                className="window-detach-menu-item"
+                onClick={() => {
+                  setIsDetachMenuOpen(false);
+                  onToggleBothDetached?.();
+                }}
+              >
+                {isNotesDetached && isTasksDetached
+                  ? 'Attach both'
+                  : 'Detach both'}
+              </button>
+            </section>
+          </div>
+        ) : null}
         <button
           type="button"
           aria-label="Minimize window"
@@ -277,98 +283,53 @@ function WindowOverlayControls({
         aria-hidden={!isSettingsOpen}
         aria-label="Window settings"
       >
-        <div className="settings-group">
-          <p className="settings-group-label">Window Size</p>
-          <p className="settings-group-hint">
-            {MIN_WINDOW_WIDTH}-{MAX_WINDOW_WIDTH}px wide /{' '}
-            {MIN_WINDOW_HEIGHT}-{MAX_WINDOW_HEIGHT}px high
-          </p>
-          <form
-            className="settings-size-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void handleApplyWindowSize();
-            }}
-          >
-            <div className="settings-size-inline">
+        {mode === 'main' ? (
+          <div className="settings-group">
+            <p className="settings-group-label">UI Scale</p>
+            <div className="settings-scale-row">
               <input
-                type="number"
-                inputMode="numeric"
-                min={MIN_WINDOW_WIDTH}
-                max={MAX_WINDOW_WIDTH}
-                step={1}
-                value={windowWidthInput}
-                className="settings-size-inline-input"
-                aria-label="Window width"
+                type="range"
+                min={MIN_UI_SCALE}
+                max={MAX_UI_SCALE}
+                step={UI_SCALE_STEP}
+                value={settings.uiScale}
+                className="settings-scale-slider"
+                aria-label="Global UI scale"
                 onChange={(event) => {
-                  setWindowWidthInput(event.target.value);
+                  void onUiScaleChange(
+                    normalizeUiScaleInput(Number(event.target.value)),
+                  );
                 }}
               />
-              <span className="settings-size-multiply" aria-hidden="true">
-                x
+              <span className="settings-scale-value">
+                {settings.uiScale.toFixed(1)}x
               </span>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={MIN_WINDOW_HEIGHT}
-                max={MAX_WINDOW_HEIGHT}
-                step={1}
-                value={windowHeightInput}
-                className="settings-size-inline-input"
-                aria-label="Window height"
-                onChange={(event) => {
-                  setWindowHeightInput(event.target.value);
-                }}
-              />
-              <button type="submit" className="settings-size-apply">
-                Apply
-              </button>
             </div>
-          </form>
-        </div>
-        <div className="settings-group">
-          <p className="settings-group-label">UI Scale</p>
-          <div className="settings-scale-row">
-            <input
-              type="range"
-              min={MIN_UI_SCALE}
-              max={MAX_UI_SCALE}
-              step={UI_SCALE_STEP}
-              value={settings.uiScale}
-              className="settings-scale-slider"
-              aria-label="Global UI scale"
-              onChange={(event) => {
-                void onUiScaleChange(
-                  normalizeUiScaleInput(Number(event.target.value)),
-                );
-              }}
-            />
-            <span className="settings-scale-value">
-              {settings.uiScale.toFixed(1)}x
-            </span>
           </div>
-        </div>
+        ) : null}
         <div className="settings-group">
           <p className="settings-group-label">Window Layer</p>
-          <div className="settings-scale-row">
-            <input
-              type="range"
-              min={MIN_SHELL_OPACITY}
-              max={MAX_SHELL_OPACITY}
-              step={SHELL_OPACITY_STEP}
-              value={settings.shellOpacity}
-              className="settings-scale-slider"
-              aria-label="Backplate opacity"
-              onChange={(event) => {
-                void onShellOpacityChange(
-                  normalizeShellOpacityInput(Number(event.target.value)),
-                );
-              }}
-            />
-            <span className="settings-scale-value">
-              {Math.round(settings.shellOpacity * 100)}%
-            </span>
-          </div>
+          {mode === 'main' ? (
+            <div className="settings-scale-row">
+              <input
+                type="range"
+                min={MIN_SHELL_OPACITY}
+                max={MAX_SHELL_OPACITY}
+                step={SHELL_OPACITY_STEP}
+                value={settings.shellOpacity}
+                className="settings-scale-slider"
+                aria-label="Backplate opacity"
+                onChange={(event) => {
+                  void onShellOpacityChange(
+                    normalizeShellOpacityInput(Number(event.target.value)),
+                  );
+                }}
+              />
+              <span className="settings-scale-value">
+                {Math.round(settings.shellOpacity * 100)}%
+              </span>
+            </div>
+          ) : null}
           <button
             type="button"
             className={
@@ -381,18 +342,20 @@ function WindowOverlayControls({
             <span>Always on Top</span>
             <strong>{settings.alwaysOnTop ? 'On' : 'Off'}</strong>
           </button>
-          <button
-            type="button"
-            className={
-              settings.autoFadeWhenInactive
-                ? 'settings-toggle-button settings-toggle-button-active'
-                : 'settings-toggle-button'
-            }
-            onClick={handleToggleAutoFadeWhenInactive}
-          >
-            <span>Auto Fade</span>
-            <strong>{settings.autoFadeWhenInactive ? 'On' : 'Off'}</strong>
-          </button>
+          {mode === 'main' ? (
+            <button
+              type="button"
+              className={
+                settings.autoFadeWhenInactive
+                  ? 'settings-toggle-button settings-toggle-button-active'
+                  : 'settings-toggle-button'
+              }
+              onClick={handleToggleAutoFadeWhenInactive}
+            >
+              <span>Auto Fade</span>
+              <strong>{settings.autoFadeWhenInactive ? 'On' : 'Off'}</strong>
+            </button>
+          ) : null}
         </div>
         <div className="settings-group">
           <p className="settings-group-label">Color Theme</p>
@@ -422,49 +385,6 @@ function WindowOverlayControls({
                 }}
               />
             ))}
-          </div>
-        </div>
-        <div className="settings-group">
-          <p className="settings-group-label">Sort Rule</p>
-          <div className="settings-sort-row">
-            <label className="settings-sort-select-shell">
-              <span className="settings-sort-label">Sort by</span>
-              <select
-                className="settings-sort-select"
-                value={settings.noteSort.field}
-                onChange={(event) => {
-                  void onNoteSortChange(
-                    event.target.value as NoteSortField,
-                    settings.noteSort.direction,
-                  );
-                }}
-              >
-                {SORT_FIELD_OPTIONS.map((sortOption) => (
-                  <option key={sortOption.value} value={sortOption.value}>
-                    {sortOption.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              className="settings-sort-direction"
-              aria-label={
-                settings.noteSort.direction === 'desc'
-                  ? 'Newest to oldest'
-                  : 'Oldest to newest'
-              }
-              title={
-                settings.noteSort.direction === 'desc'
-                  ? 'Newest to oldest'
-                  : 'Oldest to newest'
-              }
-              onClick={handleToggleSortDirection}
-            >
-              <span className="settings-sort-direction-glyph" aria-hidden="true">
-                {settings.noteSort.direction === 'desc' ? 'v' : '^'}
-              </span>
-            </button>
           </div>
         </div>
       </section>

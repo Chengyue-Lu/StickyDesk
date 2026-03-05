@@ -7,6 +7,10 @@
   ],
   "permissions": [
     "core:default",
+    "core:webview:allow-create-webview-window",
+    "core:window:allow-close",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-position",
     "dialog:default",
     "log:default",
     "opener:default",

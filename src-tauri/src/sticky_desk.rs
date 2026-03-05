@@ -10,7 +10,10 @@ use std::{
 use chrono::{DateTime, Duration, Local, LocalResult, NaiveDateTime, TimeZone, Timelike};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tauri::{AppHandle, LogicalSize, Manager, Size, State, Window, WindowEvent};
+use tauri::{
+    AppHandle, LogicalSize, Manager, Size, State, WebviewUrl, WebviewWindowBuilder, Window,
+    WindowEvent,
+};
 use uuid::Uuid;
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::{
@@ -25,10 +28,16 @@ const TIMESTAMP_FORMAT: &str = "%Y-%m-%dT%H:%M:00";
 const TIMESTAMP_INPUT_FORMAT: &str = "%Y-%m-%dT%H:%M:%S";
 const TIMESTAMP_INPUT_FORMAT_SHORT: &str = "%Y-%m-%dT%H:%M";
 const MAIN_WINDOW_LABEL: &str = "main";
+const TEST_WINDOW_LABEL: &str = "test-window";
+const TEST_WINDOW_WIDTH: f64 = 260.0;
+const TEST_WINDOW_HEIGHT: f64 = 160.0;
+const TEST_WINDOW_GAP: i64 = 12;
 const MIN_WINDOW_WIDTH: u32 = 360;
-const MIN_WINDOW_HEIGHT: u32 = 720;
+const MIN_WINDOW_HEIGHT: u32 = 220;
+const DEFAULT_WINDOW_HEIGHT: u32 = 720;
 const MAX_WINDOW_WIDTH: u32 = MIN_WINDOW_WIDTH * 3;
 const MAX_WINDOW_HEIGHT: u32 = 2160;
+const MAIN_WINDOW_COMPACT_HEIGHT: u32 = 230;
 const MIN_UI_SCALE: f64 = 1.0;
 const MAX_UI_SCALE: f64 = 2.0;
 const MIN_SHELL_OPACITY: f64 = 0.2;
@@ -39,21 +48,15 @@ const DEFAULT_NOTE_SORT_DIRECTION: &str = "desc";
 const UNTITLED_NOTE_TITLE: &str = "Untitled note";
 const UNTITLED_TASK_TITLE: &str = "Untitled task";
 static APP_IS_QUITTING: AtomicBool = AtomicBool::new(false);
+static IGNORE_NEXT_MAIN_RESIZE_PERSIST: AtomicBool = AtomicBool::new(false);
+static MAIN_WINDOW_LAYOUT_IS_COMPACT: AtomicBool = AtomicBool::new(false);
+static MAIN_WINDOW_HEIGHT_BEFORE_COMPACT: Mutex<Option<u32>> = Mutex::new(None);
 
 pub type CommandResult<T> = Result<T, String>;
 
 #[derive(Default)]
 pub struct StorageState {
     lock: Mutex<()>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WindowBounds {
-    pub width: u32,
-    pub height: u32,
-    pub x: i32,
-    pub y: i32,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -349,7 +352,7 @@ fn default_settings() -> AppSettings {
         auto_fade_when_inactive: true,
         window: WindowSettings {
             width: MIN_WINDOW_WIDTH,
-            height: MIN_WINDOW_HEIGHT,
+            height: DEFAULT_WINDOW_HEIGHT,
         },
         note_sort: NoteSortSettings {
             field: DEFAULT_NOTE_SORT_FIELD.to_string(),
@@ -805,25 +808,76 @@ fn persist_window_size(
     })
 }
 
-fn read_window_bounds(window: &Window) -> CommandResult<WindowBounds> {
+fn clamp_i64(value: i64, minimum: i64, maximum: i64) -> i64 {
+    if maximum < minimum {
+        return minimum;
+    }
+
+    value.clamp(minimum, maximum)
+}
+
+fn read_window_width(window: &Window) -> CommandResult<u32> {
     let scale_factor = window
         .scale_factor()
         .map_err(|error| format!("StickyDesk: failed to read scale factor: {error}"))?;
-    let position = window
-        .outer_position()
-        .map_err(|error| format!("StickyDesk: failed to read window position: {error}"))?;
     let size = window
         .inner_size()
         .map_err(|error| format!("StickyDesk: failed to read window size: {error}"))?;
-    let logical_position = position.to_logical::<f64>(scale_factor);
     let logical_size = size.to_logical::<f64>(scale_factor);
 
-    Ok(WindowBounds {
-        x: logical_position.x.round() as i32,
-        y: logical_position.y.round() as i32,
-        width: clamp_window_width(logical_size.width),
-        height: clamp_window_height(logical_size.height),
-    })
+    Ok(clamp_window_width(logical_size.width))
+}
+
+fn read_window_height(window: &Window) -> CommandResult<u32> {
+    let scale_factor = window
+        .scale_factor()
+        .map_err(|error| format!("StickyDesk: failed to read scale factor: {error}"))?;
+    let size = window
+        .inner_size()
+        .map_err(|error| format!("StickyDesk: failed to read window size: {error}"))?;
+    let logical_size = size.to_logical::<f64>(scale_factor);
+
+    Ok(clamp_window_height(logical_size.height))
+}
+
+fn resolve_test_window_position(window: &Window) -> CommandResult<(f64, f64)> {
+    let current_position = window
+        .outer_position()
+        .map_err(|error| format!("StickyDesk: failed to read current window position: {error}"))?;
+    let current_size = window
+        .outer_size()
+        .map_err(|error| format!("StickyDesk: failed to read current window size: {error}"))?;
+    let monitor = window
+        .current_monitor()
+        .map_err(|error| format!("StickyDesk: failed to read current monitor: {error}"))?
+        .or_else(|| window.primary_monitor().ok().flatten())
+        .ok_or_else(|| "StickyDesk: no monitor found for test window.".to_string())?;
+    let monitor_position = monitor.position();
+    let monitor_size = monitor.size();
+    let monitor_left = i64::from(monitor_position.x);
+    let monitor_top = i64::from(monitor_position.y);
+    let monitor_right = monitor_left + i64::from(monitor_size.width);
+    let monitor_bottom = monitor_top + i64::from(monitor_size.height);
+    let current_left = i64::from(current_position.x);
+    let current_top = i64::from(current_position.y);
+    let current_right = current_left + i64::from(current_size.width);
+    let left_space = current_left - monitor_left;
+    let right_space = monitor_right - current_right;
+    let test_width = TEST_WINDOW_WIDTH.round() as i64;
+    let test_height = TEST_WINDOW_HEIGHT.round() as i64;
+    // When spaces are equal, place on the right side for deterministic behavior.
+    let place_on_right = right_space >= left_space;
+    let suggested_x = if place_on_right {
+        current_right + TEST_WINDOW_GAP
+    } else {
+        current_left - test_width - TEST_WINDOW_GAP
+    };
+    let max_x = monitor_right - test_width;
+    let max_y = monitor_bottom - test_height;
+    let x = clamp_i64(suggested_x, monitor_left, max_x);
+    let y = clamp_i64(current_top, monitor_top, max_y);
+
+    Ok((x as f64, y as f64))
 }
 
 pub fn apply_saved_window_preferences(app: &AppHandle) {
@@ -874,6 +928,14 @@ pub fn handle_window_event(window: &Window, event: &WindowEvent) {
         return;
     };
 
+    if MAIN_WINDOW_LAYOUT_IS_COMPACT.load(Ordering::Relaxed) {
+        return;
+    }
+
+    if IGNORE_NEXT_MAIN_RESIZE_PERSIST.swap(false, Ordering::Relaxed) {
+        return;
+    }
+
     let scale_factor = window.scale_factor().unwrap_or(1.0);
     let logical_size = size.to_logical::<f64>(scale_factor);
     let width = clamp_window_width(logical_size.width);
@@ -895,9 +957,15 @@ pub fn minimize_window(window: Window) -> CommandResult<()> {
 
 #[tauri::command]
 pub fn close_window(window: Window) -> CommandResult<()> {
+    if window.label() == MAIN_WINDOW_LABEL {
+        return window
+            .hide()
+            .map_err(|error| format!("StickyDesk: failed to hide window: {error}"));
+    }
+
     window
-        .hide()
-        .map_err(|error| format!("StickyDesk: failed to hide window: {error}"))
+        .close()
+        .map_err(|error| format!("StickyDesk: failed to close secondary window: {error}"))
 }
 
 pub fn request_app_exit(app: &AppHandle) {
@@ -918,30 +986,46 @@ pub fn should_show_window_on_boot() -> bool {
 }
 
 #[tauri::command]
-pub fn set_window_size(
-    window: Window,
-    state: State<'_, StorageState>,
-    width: f64,
-    height: f64,
-) -> CommandResult<WindowBounds> {
-    let safe_width = clamp_window_width(width);
-    let safe_height = clamp_window_height(height);
+pub fn open_test_window(window: Window) -> CommandResult<()> {
+    log::info!("StickyDesk: open_test_window invoked by {}.", window.label());
+    let app = window.app_handle();
 
-    window
-        .set_size(Size::Logical(LogicalSize::<f64>::new(
-            f64::from(safe_width),
-            f64::from(safe_height),
-        )))
-        .map_err(|error| format!("StickyDesk: failed to resize window: {error}"))?;
+    if let Some(existing_window) = app.get_webview_window(TEST_WINDOW_LABEL) {
+        log::info!("StickyDesk: reusing existing test window.");
+        existing_window
+            .show()
+            .map_err(|error| format!("StickyDesk: failed to show test window: {error}"))?;
+        existing_window
+            .set_focus()
+            .map_err(|error| format!("StickyDesk: failed to focus test window: {error}"))?;
 
-    persist_window_size(&window.app_handle(), &state, safe_width, safe_height)?;
+        return Ok(());
+    }
 
-    Ok(read_window_bounds(&window).unwrap_or(WindowBounds {
-        x: 0,
-        y: 0,
-        width: safe_width,
-        height: safe_height,
-    }))
+    let (x, y) = resolve_test_window_position(&window)?;
+    let url = WebviewUrl::App("index.html".into());
+
+    let test_window = WebviewWindowBuilder::new(app, TEST_WINDOW_LABEL, url)
+        .title("StickyDesk Test")
+        .initialization_script("window.__STICKYDESK_WINDOW_KIND__ = 'test';")
+        .inner_size(TEST_WINDOW_WIDTH, TEST_WINDOW_HEIGHT)
+        .position(x, y)
+        .resizable(false)
+        .maximizable(false)
+        .minimizable(false)
+        .visible(false)
+        .build()
+        .map_err(|error| format!("StickyDesk: failed to create test window: {error}"))?;
+    // New child windows may not run frontend scripts while fully hidden.
+    test_window
+        .show()
+        .map_err(|error| format!("StickyDesk: failed to show new test window: {error}"))?;
+    test_window
+        .set_focus()
+        .map_err(|error| format!("StickyDesk: failed to focus new test window: {error}"))?;
+    log::info!("StickyDesk: created test window at ({x}, {y}).");
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -961,6 +1045,68 @@ pub fn set_always_on_top(
     })?;
 
     Ok(applied_value)
+}
+
+#[tauri::command]
+pub fn set_window_always_on_top_local(window: Window, value: bool) -> CommandResult<bool> {
+    window
+        .set_always_on_top(value)
+        .map_err(|error| format!("StickyDesk: failed to toggle always-on-top: {error}"))?;
+
+    Ok(window.is_always_on_top().unwrap_or(value))
+}
+
+#[tauri::command]
+pub fn set_main_window_layout_compact(
+    window: Window,
+    state: State<'_, StorageState>,
+    compact: bool,
+) -> CommandResult<()> {
+    if window.label() != MAIN_WINDOW_LABEL {
+        return Ok(());
+    }
+
+    let width = read_window_width(&window)?;
+    let height = if compact {
+        let current_height = read_window_height(&window)?;
+        match MAIN_WINDOW_HEIGHT_BEFORE_COMPACT.lock() {
+            Ok(mut value) => {
+                *value = Some(current_height);
+            }
+            Err(_) => {
+                log::warn!("StickyDesk: failed to cache pre-compact window height.");
+            }
+        }
+        MAIN_WINDOW_LAYOUT_IS_COMPACT.store(true, Ordering::Relaxed);
+        MAIN_WINDOW_COMPACT_HEIGHT
+    } else {
+        let cached_height = match MAIN_WINDOW_HEIGHT_BEFORE_COMPACT.lock() {
+            Ok(mut value) => value.take(),
+            Err(_) => {
+                log::warn!("StickyDesk: failed to read pre-compact window height.");
+                None
+            }
+        };
+
+        cached_height.unwrap_or(
+            with_storage_lock(&state, || read_settings_unlocked(&window.app_handle()))
+                .map(|settings| settings.window.height)?,
+        )
+    };
+
+    if !compact {
+        MAIN_WINDOW_LAYOUT_IS_COMPACT.store(false, Ordering::Relaxed);
+    }
+
+    IGNORE_NEXT_MAIN_RESIZE_PERSIST.store(true, Ordering::Relaxed);
+    window
+        .set_size(Size::Logical(LogicalSize::<f64>::new(
+            f64::from(width),
+            f64::from(height),
+        )))
+        .map_err(|error| format!("StickyDesk: failed to set layout window size: {error}"))?;
+
+    Ok(())
 }
 
 #[tauri::command]
